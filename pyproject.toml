@@ -1,0 +1,31 @@
+[project]
+name = "morphos"
+version = "0.1.0"
+description = "Emergent communication in regenerating neural cellular automata"
+requires-python = ">=3.11"
+dependencies = [
+    "torch>=2.9",
+    "numpy>=2.0",
+    "matplotlib>=3.9",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+# Deferred to week 2: linear_sum_assignment (Hungarian) + bootstrap CIs.
+stats = ["scipy>=1.14"]
+dev = ["pytest>=8.0"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["morphos*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "slow: integration tests that train a tiny model (excluded from `make fast`)",
+    "mps: requires Apple MPS backend",
+]
+addopts = "-q"

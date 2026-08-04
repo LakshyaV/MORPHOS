@@ -1,0 +1,10 @@
+.venv/
+runs/
+*.egg-info/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.mp4
+*.npz
+*.pt
+.DS_Store

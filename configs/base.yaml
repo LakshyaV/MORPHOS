@@ -1,0 +1,56 @@
+# Defaults inherited by every experiment. Override with `_base_: base.yaml`
+# in a child config, or on the CLI with `--set train.lr=3e-4`.
+
+name: base
+seed: 0
+
+# Measured, not assumed: MPS is 11.2x faster than native arm64 CPU on the
+# decisive 2-organism communication step. See `make bench` / README.
+device: mps
+
+organism: {name: nca, args: {}}
+readout:  {name: vote_pool, args: {}}
+damage:   {name: none, args: {}}
+
+nca:
+  # 28 channels: RGBA(4) + sensor + vote + hidden. At 16 channels, taking 8 for
+  # symbol votes leaves too few for morphogenesis and fails silently.
+  hidden: 128
+  grid: 32
+  fire_rate: 0.5
+  alive_threshold: 0.1
+
+task:
+  n_referents: 8        # {0,1}^3, factored so attribute-wise MI is defined
+  vocab: 8              # N <= V^L must hold: 8 <= 8^1
+  msg_len: 1
+  tau_start: 2.0
+  tau_end: 0.5
+  tau_anneal_steps: 5000
+  t_inject: 16          # referent removed after this, forcing the sender to STORE it
+
+train:
+  phase: comm           # morph | comm
+  steps: 20000
+  batch: 32
+  lr: 2.0e-3
+  grad_norm_per_tensor: true
+  pool_size: 1024
+  reseed_worst: 1
+  damage_best: 3
+  t_grow: 64
+  # Long enough for signal to cross the body: stochastic updates propagate
+  # ~0.5 cells/step, so 24 steps would only reach ~12 cells.
+  t_comm: 64
+  # Mandatory on 8 GB. Measured: 3300 MB -> 1110 MB at T=64, and memory is then
+  # nearly independent of rollout length (T=128 costs 1119 MB).
+  checkpoint_every: 8
+  min_alive_frac_for_task_loss: 0.6
+  ckpt_interval: 2000
+  log_interval: 50
+
+eval:
+  damage_levels: [0.0, 0.10, 0.20, 0.30, 0.45, 0.60]
+  recovery_steps: 256
+  n_episodes: 512
+  n_placements: 32
