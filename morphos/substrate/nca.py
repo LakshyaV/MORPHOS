@@ -145,16 +145,30 @@ class NCAOrganism(nn.Module):
         generator: torch.Generator,
         inject_fn=None,
         checkpoint_every: int | None = None,
+        fire_masks: list[Tensor] | None = None,
     ) -> Tensor:
         """Run ``n_steps`` updates.
 
         ``inject_fn(x, t) -> x`` is applied before each step (sensor/ear writes).
         ``checkpoint_every`` trades ~1.33x compute for ~4x less activation memory;
         required on 8 GB for rollouts beyond ~24 steps.
+
+        ``fire_masks`` supplies the stochastic update masks explicitly instead of
+        drawing them. The probe needs this: to isolate the effect of an injected
+        code from update noise, every code must experience the *same* fire mask,
+        otherwise between-code variance is contaminated by mask differences.
         """
-        masks = [
-            self.sample_fire_mask(x.shape[0], generator, x.device) for _ in range(n_steps)
-        ]
+        if fire_masks is not None:
+            if len(fire_masks) < n_steps:
+                raise ValueError(
+                    f"need {n_steps} fire masks, got {len(fire_masks)}"
+                )
+            masks = fire_masks
+        else:
+            masks = [
+                self.sample_fire_mask(x.shape[0], generator, x.device)
+                for _ in range(n_steps)
+            ]
 
         if checkpoint_every is None:
             for t in range(n_steps):
