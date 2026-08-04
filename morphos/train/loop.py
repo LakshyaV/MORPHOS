@@ -20,7 +20,7 @@ from typing import Any, Protocol
 import torch
 from torch import Tensor
 
-from morphos.config import Config
+from morphos.config import Config, config_dict
 from morphos.eval.metrics import alive_count, body_mask, iou
 from morphos.io.runlog import RunLog
 from morphos.seeding import RNG, make_rng
@@ -76,6 +76,7 @@ class TrainState:
     seed_state: Tensor
     pool: PoolLike | None = None
     guard: DeathGuard = field(default_factory=DeathGuard)
+    rng: RNG | None = None
     step: int = 0
     n_resets: int = 0
 
@@ -200,6 +201,24 @@ def _memory_mb(device: torch.device) -> float:
     return float("nan")
 
 
+def _save_last(st: TrainState, cfg: Config, run_dir: Path, target: Tensor) -> None:
+    from morphos.task.targets import target_fingerprint
+    from morphos.train.checkpoint import save
+
+    save(
+        Path(run_dir) / "ckpt" / "last.pt",
+        step=st.step,
+        model=st.model,
+        optimizer=st.opt,
+        scheduler=st.sched,
+        rng=st.rng,
+        pool=st.pool,
+        config=config_dict(cfg),
+        target_fingerprint=target_fingerprint(target),
+        extra={"n_resets": st.n_resets},
+    )
+
+
 def train(
     cfg: Config,
     target: Tensor,
@@ -207,22 +226,44 @@ def train(
     run_dir: str | Path,
     log: RunLog | None = None,
     gate_fn: Any = None,
+    resume: str | Path | None = None,
 ) -> TrainState:
     """Full training run with death-reset handling and periodic gate checks."""
+    from morphos.task.targets import target_fingerprint
+    from morphos.train.checkpoint import load as load_ckpt
+    from morphos.train.checkpoint import save as save_ckpt
+
     device = torch.device(cfg.device)
     target = target.to(device)
+    run_dir = Path(run_dir)
     owns_log = log is None
-    log = log or RunLog(run_dir, {"name": cfg.name})
+    log = log or RunLog(run_dir, config_dict(cfg), resume=resume is not None)
 
     rng = make_rng(cfg.seed, device)
     st = build_state(cfg, device=device, weight_seed=cfg.seed * 1000 + 97)
+    st.rng = rng
+
+    if resume is not None:
+        ckpt = load_ckpt(
+            resume,
+            model=st.model,
+            optimizer=st.opt,
+            scheduler=st.sched,
+            rng=st.rng,
+            pool=st.pool,
+            map_location=device,
+            expect_target_fingerprint=target_fingerprint(target),
+        )
+        st.step = int(ckpt["step"])
+        log.event("resume", step=st.step, path=str(resume))
+
     ema: float | None = None
     t0 = time.perf_counter()
     consecutive_gate_passes = 0
 
     while st.step < cfg.train.steps:
         try:
-            rec = train_step(st, target, rng, cfg)
+            rec = train_step(st, target, st.rng, cfg)
         except DeathReset as e:
             st.n_resets += 1
             log.event(
@@ -243,8 +284,8 @@ def train(
                 cfg, device=device, weight_seed=cfg.seed * 1000 + 97 * (st.n_resets + 1)
             )
             st_new.n_resets = st.n_resets
+            st_new.rng = make_rng(cfg.seed + st.n_resets, device)
             st = st_new
-            rng = make_rng(cfg.seed + st.n_resets, device)
             ema = None
             continue
 
@@ -260,6 +301,16 @@ def train(
                 **rec,
             )
 
+        if st.step % cfg.train.ckpt_interval == 0:
+            _save_last(st, cfg, run_dir, target)
+            save_ckpt(
+                run_dir / "ckpt" / f"step_{st.step:06d}.pt",
+                step=st.step,
+                model=st.model,
+                rng=st.rng,
+                target_fingerprint=target_fingerprint(target),
+            )
+
         if gate_fn is not None and st.step % cfg.train.gate_interval == 0:
             results = gate_fn(st.model, target, cfg, device=device)
             for r in results:
@@ -270,6 +321,7 @@ def train(
                 log.event("early_stop", step=st.step, reason="gates passed twice")
                 break
 
+    _save_last(st, cfg, run_dir, target)
     if owns_log:
         log.close()
     return st
