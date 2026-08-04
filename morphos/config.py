@@ -43,8 +43,20 @@ class NCACfg:
 
 
 @dataclass(frozen=True)
+class TaskCfg:
+    n_referents: int = 8
+    vocab: int = 8
+    msg_len: int = 1
+    # Injection stops after this many steps, forcing the organism to STORE the
+    # referent rather than continuously re-read it. Set equal to the rollout
+    # length for the easier continuous-injection diagnostic.
+    t_inject: int = 16
+    patch: int = 3
+
+
+@dataclass(frozen=True)
 class TrainCfg:
-    phase: str = "morph"  # morph | comm
+    phase: str = "morph"  # morph | broadcast | comm
     steps: int = 6000
     batch: int = 32
     lr: float = 2.0e-3
@@ -69,6 +81,14 @@ class TrainCfg:
     # 1-of-8 and 3-of-8, so at batch 32 these are 4 and 12.
     reseed_worst: int = 4
     damage_best: int = 12
+
+    # Weight on the per-cell vote loss relative to morphology. Watch the per-term
+    # GRADIENT NORMS, not the loss values: they differ by orders of magnitude.
+    lambda_vote: float = 1.0
+    # Pool the readout over a random subset of alive cells during training. This
+    # is the only mechanism supplying gradient pressure toward electorate
+    # invariance, which is exactly what the damage experiment depends on.
+    readout_dropout: float = 0.3
 
     log_interval: int = 50
     gate_interval: int = 500
@@ -101,9 +121,16 @@ class Config:
     device: str = "mps"
     target: TargetCfg = field(default_factory=TargetCfg)
     nca: NCACfg = field(default_factory=NCACfg)
+    task: TaskCfg = field(default_factory=TaskCfg)
     train: TrainCfg = field(default_factory=TrainCfg)
     guard: GuardCfg = field(default_factory=GuardCfg)
     eval: EvalCfg = field(default_factory=EvalCfg)
+    # Warm-start weights from a trained checkpoint. The broadcast/comm phases
+    # start from a morphology-trained organism rather than relearning growth.
+    init_from: str | None = None
+    # Pre-fill the pool with bodies grown for this many steps, so the referent is
+    # injected into a MATURE organism instead of a single seed cell.
+    prefill_grow: int | None = None
 
     def __post_init__(self) -> None:
         t, n, tr = self.target, self.nca, self.train
@@ -121,6 +148,10 @@ class Config:
             raise ValueError(f"rollout_min {tr.rollout_min} > rollout_max {tr.rollout_max}")
         if tr.damage_from_step is not None and tr.pool_from_step is None:
             raise ValueError("damage requires the pool; set pool_from_step")
+        if tr.phase not in {"morph", "broadcast", "comm"}:
+            raise ValueError(f"unknown training phase {tr.phase!r}")
+        if self.task.n_referents > 2 ** self.task.vocab:
+            raise ValueError("n_referents exceeds what the vocabulary can encode")
         if self.device not in {"cpu", "mps", "cuda"}:
             raise ValueError(f"unknown device {self.device!r}")
 

@@ -1,0 +1,48 @@
+# The broadcast task: can per-cell supervision push a referent across the body?
+#
+# This exists because of the Milestone 2 probe: a morphology-trained organism
+# relays an injected signal only ~5 cells against a body radius of 9, and its loss
+# never referenced the sensor channels so it had no reason to relay anything.
+# Here every alive cell is supervised to vote for the injected referent, which a
+# cell can only do if the signal reached it.
+#
+# Two changes follow from that finding:
+#   - radius 10 -> 7, putting max geodesic inside the measured envelope while
+#     still leaving ~160 cells for the distributedness analysis.
+#   - warm-start from the trained morphology model rather than relearning growth,
+#     and pre-grow the pool so the referent is injected into a mature body.
+
+_base_: base.yaml
+
+name: broadcast
+init_from: runs/milestone2/ckpt/last.pt
+prefill_grow: 64
+
+target:
+  radius: 7.0
+
+task:
+  n_referents: 8
+  t_inject: 16
+  patch: 3
+
+train:
+  phase: broadcast
+  steps: 4000
+  lr: 1.0e-3          # warm-started, so a gentler LR than from scratch
+  lr_milestones: [2000]
+
+  # Pool from the start: bodies are pre-grown, and the referent should be posed to
+  # a mature organism, not a seed.
+  pool_from_step: 0
+  damage_from_step: null   # damage comes later; isolate propagation first
+
+  rollout_min: 64
+  rollout_max: 96
+
+  lambda_vote: 1.0
+  readout_dropout: 0.3
+
+  log_interval: 50
+  ckpt_interval: 1000
+  early_stop_on_gates: false

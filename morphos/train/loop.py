@@ -75,6 +75,7 @@ class TrainState:
     sched: torch.optim.lr_scheduler.LRScheduler
     seed_state: Tensor
     pool: PoolLike | None = None
+    pool_readout: object | None = None
     guard: DeathGuard = field(default_factory=DeathGuard)
     rng: RNG | None = None
     step: int = 0
@@ -92,6 +93,11 @@ def build_state(cfg: Config, *, device: torch.device, weight_seed: int) -> Train
         alive_threshold=cfg.nca.alive_threshold,
     ).to(device)
 
+    if cfg.init_from:
+        from morphos.train.checkpoint import load as load_ckpt
+
+        load_ckpt(cfg.init_from, model=model, map_location=device)
+
     opt = torch.optim.Adam(model.parameters(), lr=cfg.train.lr)
     sched = torch.optim.lr_scheduler.MultiStepLR(
         opt, milestones=list(cfg.train.lr_milestones), gamma=cfg.train.lr_gamma
@@ -105,6 +111,23 @@ def build_state(cfg: Config, *, device: torch.device, weight_seed: int) -> Train
         from morphos.substrate.pool import SamplePool
 
         pool = SamplePool(seed, cfg.train.pool_size, device=device)
+        if cfg.prefill_grow:
+            # Grow the whole pool once so the task is posed to mature bodies.
+            with torch.no_grad():
+                g = torch.Generator(device=device).manual_seed(cfg.seed ^ 0xF11)
+                chunks = []
+                for i in range(0, cfg.train.pool_size, 128):
+                    n = min(128, cfg.train.pool_size - i)
+                    chunks.append(
+                        model.rollout(model.seed_state(n, device=device),
+                                      cfg.prefill_grow, generator=g)
+                    )
+                pool.commit(torch.arange(cfg.train.pool_size, device=device),
+                            torch.cat(chunks))
+
+    from morphos.task.readout import VotePool
+
+    readout = VotePool(channels=model.layout.vote, n_out=cfg.task.n_referents)
 
     return TrainState(
         model=model,
@@ -112,6 +135,7 @@ def build_state(cfg: Config, *, device: torch.device, weight_seed: int) -> Train
         sched=sched,
         seed_state=seed,
         pool=pool,
+        pool_readout=readout,
         guard=DeathGuard(
             threshold=cfg.guard.death_threshold, patience=cfg.guard.death_patience
         ),
@@ -166,10 +190,27 @@ def train_step(st: TrainState, target: Tensor, rng: RNG, cfg: Config) -> dict[st
         idx = None
         x0 = st.seed_state.expand(B, -1, -1, -1).clone()
 
+    inject_fn = None
+    referents = None
+    if cfg.train.phase == "broadcast":
+        from morphos.task.broadcast import make_inject_fn, referent_codes, sample_referents
+
+        referents = sample_referents(
+            B, cfg.task.n_referents, generator=rng.task, device=x0.device
+        )
+        codes = referent_codes(
+            cfg.task.n_referents, st.model.layout.n_sensor, device=x0.device
+        )[referents]
+        inject_fn = make_inject_fn(
+            codes, st.model.layout, cfg.nca.grid, cfg.task.t_inject,
+            patch=cfg.task.patch,
+        )
+
     out = st.model.rollout(
         x0,
         n_steps,
         generator=rng.update,
+        inject_fn=inject_fn,
         checkpoint_every=cfg.train.checkpoint_every,
     )
 
@@ -177,6 +218,15 @@ def train_step(st: TrainState, target: Tensor, rng: RNG, cfg: Config) -> dict[st
         raise DeathReset(f"all cells dead for {st.guard.patience} consecutive steps")
 
     loss = rgba_mse(out, target)
+    vote_loss = None
+    if referents is not None:
+        from morphos.task.readout import per_cell_vote_loss
+
+        # Supervising EVERY alive cell is what forces the referent to actually
+        # travel: a distant cell can only vote correctly if the signal reached it.
+        alive_soft = st.model.alive_mask(out)
+        vote_loss = per_cell_vote_loss(st.pool_readout, out, alive_soft, referents)
+        loss = loss + cfg.train.lambda_vote * vote_loss
     st.opt.zero_grad(set_to_none=True)
     loss.backward()
     if cfg.train.grad_norm_per_tensor:
@@ -192,7 +242,22 @@ def train_step(st: TrainState, target: Tensor, rng: RNG, cfg: Config) -> dict[st
         batch_iou = iou(body_mask(out), body_mask(target))
         frac_dead = (out[:, ALIVE_CHANNEL].amax(dim=(1, 2)) < st.guard.threshold)
 
+    extra: dict[str, float] = {}
+    if referents is not None:
+        from morphos.task.readout import agreement, consensus
+
+        with torch.no_grad():
+            a = st.model.alive_mask(out)
+            dec = st.pool_readout.decision(out, a)
+            extra = {
+                "vote_loss": float(vote_loss.item()),
+                "vote_acc": (dec.cpu() == referents.cpu()).float().mean().item(),
+                "consensus": consensus(st.pool_readout, out, a).mean().item(),
+                "agreement": agreement(st.pool_readout, out, a).mean().item(),
+            }
+
     return {
+        **extra,
         "loss": loss.item(),
         "lr": st.sched.get_last_lr()[0],
         "n_steps": float(n_steps),
