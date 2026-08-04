@@ -52,6 +52,10 @@ class TaskCfg:
     # length for the easier continuous-injection diagnostic.
     t_inject: int = 16
     patch: int = 3
+    # Gumbel temperature: high explores, low is near-discrete but higher variance.
+    tau_start: float = 2.0
+    tau_end: float = 0.5
+    tau_anneal_steps: int = 3000
 
 
 @dataclass(frozen=True)
@@ -85,6 +89,10 @@ class TrainCfg:
     # Weight on the per-cell vote loss relative to morphology. Watch the per-term
     # GRADIENT NORMS, not the loss values: they differ by orders of magnitude.
     lambda_vote: float = 1.0
+    # Weight on morphology during the comm phase. M3a measured the task gradient
+    # dominating morphology ~20x, so morphology needs an explicit up-weight or the
+    # organisms dissolve their bodies to talk.
+    lambda_morph: float = 30.0
     # Pool the readout over a random subset of alive cells during training. This
     # is the only mechanism supplying gradient pressure toward electorate
     # invariance, which is exactly what the damage experiment depends on.

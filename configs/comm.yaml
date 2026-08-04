@@ -1,0 +1,50 @@
+# The Lewis referential game: two organisms invent a discrete protocol.
+#
+# Sender sees one of 8 referents and emits one of 8 symbols through a
+# parameter-free consensus readout over its living cells. Receiver sees NOTHING
+# but that symbol and must name the referent. Nobody tells them what the symbols
+# mean.
+#
+# Both warm-start from the morphology checkpoint so neither relearns how to be a
+# body. Parameters stay separate -- no weight sharing, no shared state.
+
+_base_: base.yaml
+
+name: comm
+init_from: runs/milestone2/ckpt/last.pt
+prefill_grow: 64
+
+target:
+  radius: 7.0
+
+task:
+  n_referents: 8
+  vocab: 8           # N <= V^L holds exactly: 8 <= 8^1, so 3 bits for 3 bits
+  msg_len: 1
+  t_inject: 16
+  patch: 3
+  tau_start: 2.0     # explore early
+  tau_end: 0.5       # near-discrete late
+  tau_anneal_steps: 3000
+
+train:
+  phase: comm
+  steps: 6000
+  lr: 1.0e-3
+  lr_milestones: [4000]
+
+  pool_from_step: 0
+  damage_from_step: null   # damage arrives in M4; isolate emergence first
+
+  rollout_min: 64
+  rollout_max: 96
+
+  # M3a measured the task gradient dominating morphology ~20x. Without an explicit
+  # up-weight the organisms dissolve their bodies to solve the task (IoU 0.52 ->
+  # 0.25 while accuracy hit 0.97). Watch grad_ratio, not the loss values.
+  lambda_morph: 30.0
+  readout_dropout: 0.3
+
+  log_interval: 50
+  ckpt_interval: 1000
+  early_stop_on_gates: false

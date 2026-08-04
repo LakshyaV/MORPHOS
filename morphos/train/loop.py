@@ -76,6 +76,10 @@ class TrainState:
     seed_state: Tensor
     pool: PoolLike | None = None
     pool_readout: object | None = None
+    receiver: NCAOrganism | None = None
+    receiver_pool: PoolLike | None = None
+    receiver_readout: object | None = None
+    channel: object | None = None
     guard: DeathGuard = field(default_factory=DeathGuard)
     rng: RNG | None = None
     step: int = 0
@@ -127,7 +131,49 @@ def build_state(cfg: Config, *, device: torch.device, weight_seed: int) -> Train
 
     from morphos.task.readout import VotePool
 
-    readout = VotePool(channels=model.layout.vote, n_out=cfg.task.n_referents)
+    receiver = receiver_pool = receiver_readout = channel = None
+    if cfg.train.phase == "comm":
+        from morphos.substrate.nca import RECEIVER_LAYOUT
+        from morphos.task.channel import GumbelChannel
+
+        # Sender emits one of `vocab` symbols; receiver names one of `n_referents`.
+        readout = VotePool(channels=model.layout.vote, n_out=cfg.task.vocab)
+        receiver = NCAOrganism(
+            layout=RECEIVER_LAYOUT, hidden=cfg.nca.hidden, grid=cfg.nca.grid,
+            fire_rate=cfg.nca.fire_rate, alive_threshold=cfg.nca.alive_threshold,
+        ).to(device)
+        if cfg.init_from:
+            from morphos.train.checkpoint import load as _lk
+            # Separate parameters, no shared state: both merely start from the same
+            # morphology so neither has to relearn how to be a body.
+            _lk(cfg.init_from, model=receiver, map_location=device)
+        receiver_readout = VotePool(
+            channels=receiver.layout.vote, n_out=cfg.task.n_referents
+        )
+        channel = GumbelChannel(
+            vocab=cfg.task.vocab, tau_start=cfg.task.tau_start,
+            tau_end=cfg.task.tau_end, anneal_steps=cfg.task.tau_anneal_steps,
+        )
+        if cfg.train.pool_from_step is not None:
+            from morphos.substrate.pool import SamplePool
+
+            rseed = receiver.seed_state(1, device=device)
+            receiver_pool = SamplePool(rseed, cfg.train.pool_size, device=device)
+            if cfg.prefill_grow:
+                with torch.no_grad():
+                    g2 = torch.Generator(device=device).manual_seed(cfg.seed ^ 0xF22)
+                    ch = [receiver.rollout(receiver.seed_state(min(128, cfg.train.pool_size - i), device=device),
+                                           cfg.prefill_grow, generator=g2)
+                          for i in range(0, cfg.train.pool_size, 128)]
+                    receiver_pool.commit(torch.arange(cfg.train.pool_size, device=device),
+                                         torch.cat(ch))
+    else:
+        readout = VotePool(channels=model.layout.vote, n_out=cfg.task.n_referents)
+
+    if receiver is not None:
+        # One optimiser over both organisms: they share a loss, so they must be
+        # stepped together. Parameters stay separate -- no weight sharing.
+        opt.add_param_group({"params": list(receiver.parameters())})
 
     return TrainState(
         model=model,
@@ -136,6 +182,10 @@ def build_state(cfg: Config, *, device: torch.device, weight_seed: int) -> Train
         seed_state=seed,
         pool=pool,
         pool_readout=readout,
+        receiver=receiver,
+        receiver_pool=receiver_pool,
+        receiver_readout=receiver_readout,
+        channel=channel,
         guard=DeathGuard(
             threshold=cfg.guard.death_threshold, patience=cfg.guard.death_patience
         ),
@@ -205,6 +255,9 @@ def train_step(st: TrainState, target: Tensor, rng: RNG, cfg: Config) -> dict[st
             codes, st.model.layout, cfg.nca.grid, cfg.task.t_inject,
             patch=cfg.task.patch,
         )
+
+    if cfg.train.phase == "comm":
+        return _comm_step(st, target, rng, cfg, x0, idx, n_steps)
 
     out = st.model.rollout(
         x0,
@@ -413,3 +466,93 @@ def train(
     if owns_log:
         log.close()
     return st
+
+
+def _comm_step(
+    st: TrainState, target: Tensor, rng: RNG, cfg: Config,
+    x0: Tensor, idx: Tensor | None, n_steps: int,
+) -> dict[str, float]:
+    """One Lewis-game step: sender -> discrete symbol -> receiver.
+
+    Both organisms carry a morphology loss so neither dissolves its body to solve
+    the task, and the sender additionally carries the per-cell vote loss that
+    Milestone 3a showed is what forces the referent out to the periphery.
+    """
+    from morphos.task.broadcast import sample_referents
+    from morphos.task.channel import symbol_stats
+    from morphos.task.lewis import accuracy, run_episode, task_loss
+    from morphos.task.readout import agreement, quorum_fraction
+
+    B = cfg.train.batch
+    device = x0.device
+
+    if st.receiver_pool is not None:
+        r_idx, r0 = st.receiver_pool.sample(B, generator=rng.pool)
+        order = per_sample_rgba_mse(r0, target).argsort(descending=True)
+        r_idx, r0 = r_idx[order], r0[order]
+        r0[: cfg.train.reseed_worst] = st.receiver.seed_state(1, device=device)
+    else:
+        r_idx = None
+        r0 = st.receiver.seed_state(B, device=device)
+
+    referents = sample_referents(
+        B, cfg.task.n_referents, generator=rng.task, device=device
+    )
+
+    ep = run_episode(
+        st.model, st.receiver,
+        referents=referents, sender_state=x0, receiver_state=r0,
+        sender_readout=st.pool_readout, receiver_readout=st.receiver_readout,
+        channel=st.channel, rng=rng, n_referents=cfg.task.n_referents,
+        t_sender=n_steps, t_receiver=n_steps, t_inject=cfg.task.t_inject,
+        grid=cfg.nca.grid, patch=cfg.task.patch, step=st.step,
+        checkpoint_every=cfg.train.checkpoint_every,
+        hard=True, noise=True, dropout=cfg.train.readout_dropout,
+    )
+
+    if st.guard.observe(ep.sender_state):
+        raise DeathReset("sender collapsed")
+
+    morph_s = rgba_mse(ep.sender_state, target)
+    morph_r = rgba_mse(ep.receiver_state, target)
+    task = task_loss(ep, cfg.task.n_referents)
+    loss = task + cfg.train.lambda_morph * (morph_s + morph_r)
+
+    st.opt.zero_grad(set_to_none=True)
+    loss.backward()
+    if cfg.train.grad_norm_per_tensor:
+        normalize_grads_(st.model)
+        normalize_grads_(st.receiver)
+    st.opt.step()
+    st.sched.step()
+
+    if st.pool is not None and idx is not None:
+        st.pool.commit(idx, ep.sender_state.detach())
+    if st.receiver_pool is not None and r_idx is not None:
+        st.receiver_pool.commit(r_idx, ep.receiver_state.detach())
+
+    with torch.no_grad():
+        stats = symbol_stats(ep.symbol_idx, cfg.task.vocab)
+        s_alive = st.model.alive_mask(ep.sender_state)
+        rec = {
+            "loss": loss.item(),
+            "task_loss": task.item(),
+            "morph_sender": morph_s.item(),
+            "morph_receiver": morph_r.item(),
+            "acc": accuracy(ep),
+            "entropy": stats["entropy"],
+            "v_used": float(stats["v_used"]),
+            "v_eff": stats["v_eff"],
+            "tau": st.channel.temperature(st.step),
+            "iou": iou(body_mask(ep.sender_state), body_mask(target)).mean().item(),
+            "iou_recv": iou(body_mask(ep.receiver_state), body_mask(target)).mean().item(),
+            "agreement": agreement(st.pool_readout, ep.sender_state, s_alive).mean().item(),
+            "quorum": quorum_fraction(st.pool_readout, ep.sender_state, s_alive).mean().item(),
+            "lr": st.sched.get_last_lr()[0],
+            "n_steps": float(n_steps),
+            "alive_med": alive_count(ep.sender_state).float().median().item(),
+            "frac_dead": 0.0,
+            "pool": float(st.pool is not None),
+            "damage": 0.0,
+        }
+    return rec
