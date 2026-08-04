@@ -1,0 +1,159 @@
+\section{Task and readout}
+\label{sec:task}
+
+\subsection{The referential game}
+
+Two organisms play a Lewis signalling game \citep{lewis1969convention}. A sender
+observes a referent $r$ drawn uniformly from $\mathcal{R} = \{0,1\}^3$ ($N=8$)
+and emits one symbol $m$ from a vocabulary of size $V=8$. A receiver observes the
+symbol and nothing else, and must identify $r$.
+
+Communication is necessary \emph{by construction}: the receiver has no other
+input path. This is not an assumption to be argued but a property to be verified,
+and Section~\ref{sec:protocol} treats it as such --- if removing the message
+leaves accuracy above chance, there is a leak and every discrete measure in the
+paper is invalid.
+
+Referents are factored into three bits so that attribute-wise mutual information
+is well defined. The capacity is matched exactly: $N=8$ needs 3 bits and $V=8$
+supplies 3. We never run $N > V^L$; a system reporting 50\% accuracy because 16
+referents were forced through an 8-symbol channel has a self-inflicted ceiling
+rather than a finding.
+
+\subsection{Injection, and why it stops}
+
+The referent is written into the sender's 3 sensor channels over a central
+$3\times3$ patch for the first $T_{\mathrm{inj}} = 16$ steps, and then writing
+\emph{stops}. Writing stops rather than zeroing, because zeroing would itself be
+an event the organism could detect and time against; stopping is simply removal.
+
+This forces the sender to hold the referent in its own cell state for the rest of
+the rollout. The consequence is what makes the damage experiment meaningful: with
+continuous injection, a damaged sender simply re-reads the referent, and damage
+interrupts a wire. With a closed window, damage can destroy a memory. We report
+the continuous-injection variant as a control, because the two experiments are
+different and a reader is entitled to know which one was run.
+
+Referent codes are bipolar, in $\{-1,+1\}^3$ rather than $\{0,1\}^3$. Under
+$\{0,1\}$ the all-zero code writes nothing and is indistinguishable from no
+injection at all.
+
+\subsection{A parameter-free consensus readout}
+\label{sec:readout}
+
+The sender's symbol is read out of its 8 vote channels. The readout has
+\textbf{zero learned parameters}, and the reason is structural: any learned
+readout with a global receptive field could itself solve the task, and the claim
+that computation is distributed across the body would become unfalsifiable.
+
+But parameter-free is not the same as decentralised, and this is the sharpest
+design problem in the paper. A plain mean over cells has a global receptive field
+and instantaneous propagation. Worse, gradient descent actively prefers the
+centralised solution: getting a referent to distant cells costs on the order of
+64 steps of attenuating backpropagation, while having the 9 sensor cells emit an
+enormous vote costs two. \textbf{The shortest gradient path is a megaphone.}
+
+Three mechanisms push back, in increasing order of force.
+
+\paragraph{1. Per-cell softmax before pooling.} Each alive cell emits a point on
+the probability simplex, and the pooled result is the uniform mean of those
+distributions over the alive set $\alive_t$:
+%
+\begin{equation}
+  \pooled_v \;=\; \frac{1}{|\alive_t|} \sum_{x \in \alive_t}
+      \mathrm{softmax}\big(\vote(x)\big)_v ,
+  \qquad
+  \alive_t(x) = \indicator\!\left[\max_{3\times3} \alpha_t(x) > 0.1\right].
+  \label{eq:pool}
+\end{equation}
+%
+Because each cell's contribution is a probability vector, no cell can move the
+pooled result by more than $1/|\alive_t|$. The megaphone is excluded
+\emph{mechanically}, not detected after the fact by a diagnostic.
+
+We verify this rather than assert it. Driving a single cell's logit to $10^6$ in
+favour of one class, against 64 cells mildly preferring another, leaves the
+pooled decision unchanged, and silencing that cell moves the pooled distribution
+by at most $1/64$. The same input against raw-logit pooling flips the decision to
+the screaming cell's class --- a matched negative control confirming that the
+bound comes from the per-cell softmax and not from the averaging.
+
+Pooling is a hard-masked uniform mean, never $\alpha$-weighted. Alpha weighting
+would make morphological state a multiplicative modulator of the message, so the
+message would change during regeneration even if every surviving cell computed
+exactly what it did before. That single implementation detail would confound the
+entire paper.
+
+\paragraph{2. Per-cell supervision.} Every alive cell is supervised toward the
+one-hot target, not merely the pooled result:
+%
+\begin{equation}
+  \mathcal{L}_{\mathrm{vote}} = \frac{1}{|\alive_t|} \sum_{x \in \alive_t}
+    \big\| \mathrm{softmax}(\vote(x)) - \mathbf{e}_{r} \big\|_2^2 .
+\end{equation}
+%
+Consensus then becomes an emergent, measured property rather than an imposed
+aggregation, following \citet{randazzo2020selfclassifying}. It also does
+something their setting did not need: a distant cell can only vote correctly if
+the referent reached it, so supervising the whole body is a direct demand for
+propagation. Section~\ref{sec:results-probe} shows why that demand is necessary
+here.
+
+The loss is $L_2$ against a one-hot target and never cross-entropy.
+\citet{randazzo2020selfclassifying} found that cross-entropy on per-cell logit
+channels drives logits upward without bound, so the residual update never decays
+and the automaton never settles into a quiescent state. Their reported figures
+are 88.1\% of samples reaching full per-cell agreement under $L_2$ against 66.2\%
+under cross-entropy at the same step.
+
+\paragraph{3. Readout cell-dropout.} Pooling over a random subset of alive cells
+during training is the only mechanism supplying gradient pressure toward
+\emph{electorate-invariance} --- the property that the symbol does not depend on
+which cells happen to be present. That is precisely what the damage experiment
+depends on. \gated{dropout is implemented and unit-tested but is not yet applied
+in the training loop; no result in this paper may claim it as an active
+mechanism}
+
+\subsection{Deletion-invariance}
+
+The per-cell softmax bounds influence. Consensus does something stronger.
+
+\begin{proposition}[Deletion-invariance under consensus]
+\label{prop:deletion}
+If $\arg\max_v \vote_v(x) = v^{*}$ for every $x \in \alive$, then for every
+nonempty $S \subseteq \alive$,
+$\arg\max_v \frac{1}{|S|}\sum_{x \in S} \vote_v(x) = v^{*}$.
+\end{proposition}
+
+\begin{proof}
+Full consensus means $\vote_{v^{*}}(x) > \vote_u(x)$ for all $x$ and all
+$u \neq v^{*}$. Averaging preserves strict inequality termwise.
+\end{proof}
+
+The consequence is the backbone of the paper's central confound control: under
+full per-cell consensus, \textbf{cell deletion cannot mechanically flip the
+symbol}, so any observed symbol change must reflect a genuine change in what the
+cells compute. This converts the most dangerous objection --- that the readout is
+a mean and deleting 30\% of the cells changes a mean --- from an argument into a
+theorem, wherever consensus is high enough to apply.
+
+Consensus is rarely exactly full, so we also report the quantitative version. For
+a mean pool, the worst case is dropping the cells that most favour the winner, so
+sorting per-cell margins and walking down gives the exact adversarial deletion
+tolerance $k^{*}$ in one pass, with no extra forward passes and no search. We
+report the quorum fraction $k^{*}/|\alive|$: roughly $0.5$ means genuinely
+distributed, roughly $0.02$ means a megaphone.
+
+\subsection{The broadcast precursor}
+\label{sec:broadcast}
+
+Between a morphology-only organism and the full game sits a cheaper question that
+decides whether the game is viable at all: \emph{can this substrate be taught to
+move information across itself?}
+
+The broadcast task isolates it. One organism, no discrete channel, no receiver: a
+referent is injected at the centre and every alive cell is supervised to vote for
+it. It is the per-cell vote loss of Section~\ref{sec:readout} without the
+communication apparatus, and it exists because of the propagation measurement in
+Section~\ref{sec:results-probe}. Its results are in
+Section~\ref{sec:results-broadcast}.

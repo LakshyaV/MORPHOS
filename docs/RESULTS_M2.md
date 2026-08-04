@@ -106,3 +106,62 @@ Building the probe before the Lewis game is what surfaced this. Measured as
 accuracy-versus-`T_comm` instead, it would have looked like "needs more steps",
 and the fix would have been to raise `T_comm` — against a problem that time alone
 does not solve.
+
+---
+
+# Milestone 3a — the broadcast task
+
+Run `runs/broadcast`, 4000 steps, warm-started from the M2 morphology checkpoint,
+body radius 7. Held-out evaluation, 128 episodes, salted RNG.
+
+**The M2 probe's pessimism is overturned.** Per-cell supervision closes the gap it
+identified.
+
+| metric | value | threshold |
+|---|---:|---|
+| pooled vote accuracy | **0.9766** | ≥ 0.90 (chance 0.125) |
+| cell agreement | **0.9495** | ≥ 0.80 |
+| morphology IoU | **0.9179** | ≥ 0.85 |
+| quorum fraction | **0.9189** | — |
+
+**Per-cell accuracy by geodesic distance from the sensor:**
+
+```
+d=0  0.872    d=3  0.969    d=6  0.957
+d=1  0.957    d=4  0.969    d=7  0.938
+d=2  0.971    d=5  0.965    d=8  0.731
+```
+
+Against a chance floor of 0.125, cells eight rings out from the sensor vote
+correctly 73% of the time; everything from d=1 to d=7 sits above 0.93. Compare the
+morphology-only model, where linear decodability fell to chance by d≈6 and η² was
+below threshold past d=3. The information now reaches the periphery.
+
+**Quorum fraction 0.92 is the anti-centralisation result.** It is the smallest
+fraction of cells whose removal flips the pooled decision: you would have to
+delete 92% of the body to change its mind. A megaphone solution — the nine sensor
+cells shouting while the rest of the body is decorative — would score ≈0.02. This
+is the number that says the computation is genuinely distributed, and it is the
+one to put in an abstract.
+
+One oddity worth recording: d=0 (the sensor patch itself, 9 cells) scores 0.872,
+*lower* than every ring from d=1 to d=7. The cells holding the raw injected code
+are slightly worse at voting than their neighbours. Not yet explained; a small
+sample, but consistent across episodes.
+
+## The loss-balance finding
+
+The first attempt reached vote accuracy 0.97 while morphology IoU collapsed from
+0.52 to 0.25 — the organism dissolved its own body to solve the task. Measuring
+per-term gradient norms on a warm model showed why: the vote-loss gradient was
+**20× the morphology gradient**, so at `lambda_vote=1.0` communication was
+outvoting morphology 20:1.
+
+The loss *values* badly understate this — 0.036 versus 0.226 looks like a 6× gap.
+Only the gradient norms reveal the true 20×. Setting `lambda_vote=0.03` (parity is
+≈0.05) produced accuracy 0.98 *and* IoU 0.92 together.
+
+The ratio is also not static: on a freshly warm-started model it starts near 0.5,
+because the model has never seen an injected referent and its vote channels barely
+move. A single constant is therefore a compromise across a moving target, and a
+ramp may do better if the comm phase needs one.

@@ -1,0 +1,95 @@
+% MORPHOS -- Emergent Communication in Regenerating Substrates
+%
+% Build:  make paper          (needs a LaTeX toolchain -- see README.md)
+%
+% Submission mode: this draft uses [preprint] so it is readable while writing.
+% At submission, swap to the workshop option and set the workshop name:
+%     \usepackage[dblblindworkshop]{neurips_2026}
+%     \workshoptitle{<exact workshop name>}
+% Use [final] only for a camera-ready after acceptance.
+
+\documentclass{article}
+
+\usepackage[preprint]{neurips_2026}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{amsfonts}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{nicefrac}
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{xcolor}
+
+% hyperref goes late; neurips_2026 loads natbib for us.
+\usepackage{hyperref}
+\hypersetup{colorlinks=true, linkcolor=black, citecolor=black, urlcolor=blue}
+
+% ---------------------------------------------------------------------------
+% Draft machinery.
+%
+% \gated{...} marks a claim whose supporting experiment HAS NOT RUN YET.
+% It renders loudly on purpose. Before submission, run
+%     grep -rn "gated{" sections/
+% and confirm the list is empty. Setting \gatedfalse hides the markers for a
+% clean read-through -- it does NOT make the claims supported.
+% ---------------------------------------------------------------------------
+\newif\ifshowgated\showgatedtrue
+\newcommand{\gated}[1]{%
+  \ifshowgated\textcolor{red}{[PENDING: #1]}\else\fi}
+\newcommand{\todocite}[1]{\textcolor{red}{[cite: #1]}}
+
+\theoremstyle{plain}
+\newtheorem{proposition}{Proposition}
+
+% ---------------------------------------------------------------------------
+% Notation. Defined once so a change of symbol is a one-line edit.
+% ---------------------------------------------------------------------------
+\newcommand{\alive}{\mathcal{A}}          % alive set
+\newcommand{\reals}{\mathbb{R}}
+\newcommand{\indicator}{\mathbb{1}}
+\newcommand{\vote}{z}                     % per-cell vote
+\newcommand{\pooled}{\ell}                % pooled logit
+\newcommand{\MI}{\mathrm{I}}
+\newcommand{\Ent}{\mathrm{H}}
+\newcommand{\SIA}{\mathrm{SIA}}
+\newcommand{\MR}{\mathrm{MR}}
+\newcommand{\BR}{\mathrm{BR}}
+\newcommand{\IoU}{\mathrm{IoU}}
+\newcommand{\dmg}{{0^{-}}}                % immediately before damage
+\newcommand{\pdmg}{{0^{+}}}               % immediately after damage
+
+\title{Regeneration Restores the Body, Not the Convention:\\
+       Emergent Communication in Damage-Regenerating\\
+       Neural Cellular Automata}
+
+\author{%
+  Lakshya Vasudeva\\
+  \texttt{lakyvasu22@gmail.com}\\
+}
+
+\begin{document}
+
+\maketitle
+
+\input{sections/00_abstract}
+\input{sections/01_intro}
+\input{sections/02_related}
+\input{sections/03_substrate}
+\input{sections/04_task}
+\input{sections/05_protocol}
+\input{sections/06_results}
+\input{sections/07_discussion}
+
+\bibliographystyle{plainnat}
+\bibliography{refs}
+
+\appendix
+\input{sections/08_appendix}
+
+\end{document}

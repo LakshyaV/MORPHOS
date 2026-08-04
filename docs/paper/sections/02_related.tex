@@ -1,0 +1,93 @@
+\section{Related work}
+\label{sec:related}
+
+Two literatures bear on this question, both mature and well instrumented. Their
+intersection is empty.
+
+\paragraph{Growing and regenerating neural cellular automata.}
+\citet{mordvintsev2020growing} showed that a shared local update rule can grow a
+target morphology from a single seed and regenerate it after tissue loss, and
+supplied the training recipe --- sample pool, stochastic updates, alive masking
+--- that this work builds on directly. \citet{randazzo2020selfclassifying}
+extended it to a per-cell classification task in which cells reach agreement on a
+global property of the pattern they collectively form, and established two
+choices we adopt: per-cell supervision rather than supervision of an aggregate,
+and $L_2$ against a one-hot target rather than cross-entropy, since the latter
+drives per-cell logits upward without bound and prevents the automaton settling.
+Neither work involves more than one organism, and neither involves a learned
+communication channel.
+
+\citet{variengien2021towards} is the closest feasibility precedent for the
+present question: an NCA controlling a cart-pole exhibits a developmental phase,
+regeneration after damage, and robustness to input deletion. That establishes
+that NCA-borne \emph{computation} can survive structural damage. It is
+single-agent, and there is no protocol to lose.
+
+\paragraph{Multiple organisms on a shared substrate.}
+\citet{stovold2025identity} adds an identity channel that lets NCA organisms
+remain stable in close proximity, framed explicitly as groundwork for studying
+cellular-level social interaction --- but there is no signalling, no task, and no
+protocol. Sakana AI's Petri Dish NCA \citep{sakana2026pdnca} lets many
+independently parameterised NCA agents coexist, compete, and continually adapt in
+one environment, and \citet{berdica2026evolving} scale that substrate with
+population-based training toward open-ended discovery. Interaction there runs
+through continuous attack and defence channels; there is no discrete vocabulary
+and nothing that could be called a convention.
+
+\paragraph{The nearest miss, and why it is still a miss.}
+\citet{singh2026communication} is the closest existing work and deserves to be
+separated from the others carefully, because a superficial reading makes it look
+like this paper has already been written. That work studies NCA cells reaching
+\emph{majority consensus} on an unobservable global density, and introduces
+``languages'' as subpopulations separated by tunable translation barriers,
+finding that protocol heterogeneity slows consensus and that rules trained under
+varied protocols are more robust than homogeneously trained ones.
+
+The consensus machinery genuinely overlaps with ours: our readout
+(Section~\ref{sec:readout}) is a per-cell vote pooled into a collective decision,
+and that is the same family of mechanism. We do not claim otherwise. The
+divergence is on two other axes. First, the ``languages'' there are
+\emph{imposed} --- a translation barrier is a designed parameter, not a
+convention the agents invent --- whereas the object of study here is a protocol
+that emerges from a referential game with no prescribed mapping from referents to
+symbols. Second, and more decisively, nothing in that setting is damaged. The
+question of whether a protocol survives the destruction and regrowth of the
+substrate computing it does not arise.
+
+\paragraph{Emergent communication.}
+The Lewis signalling game \citep{lewis1969convention} is the standard setting,
+and \citet{lowe2019pitfalls} is the standard we hold ourselves to: agents can
+appear to communicate while doing nothing of the kind, so positive signalling and
+positive listening must be demonstrated causally rather than inferred from task
+success. We adopt their interventions as mandatory and enumerate counterfactual
+symbols exactly rather than sampling them.
+\citet{chaabouni2020compositionality} found no correlation between the
+compositionality of an emergent language and its ability to generalize, which is
+why we report compositionality-adjacent measures beside accuracy and never as a
+proxy for it. What none of this literature provides is a notion of \emph{damage}:
+its agents are fixed-architecture networks, and there is no operation on them
+corresponding to removing 30\% of the machine and letting it grow back.
+
+One apparent match is a false positive worth naming, since a keyword search
+surfaces it immediately. ESCELL \citep{chowdhury2020escell} runs a genuine Lewis
+referential game and has ``cellular'' in its title, but the word refers to
+biological cells in microscopy images; the agents are standard convolutional
+networks.
+
+\paragraph{The gap.}
+No prior work combines (i) NCA-grown, damage-regenerating agents with (ii) a
+learned, discrete, emergent protocol, tested for (iii) semantic survival under
+substrate damage. Each nearest miss drops exactly one leg: \citet{singh2026communication}
+has consensus and multiple protocols but imposes them and never damages anything;
+\citet{stovold2025identity} has coexistence without signalling;
+\citet{sakana2026pdnca} has interaction without a discrete vocabulary;
+\citet{variengien2021towards} has damage-surviving computation without
+communication; \citet{chowdhury2020escell} has the game without the substrate.
+
+There is a second gap, which is about measurement rather than systems. The NCA
+literature measures recovery as distance to a target morphology or as downstream
+task score. The emergent-communication literature has never needed a definition
+of recovery, because its agents cannot be structurally damaged. \emph{Semantic}
+recovery --- whether the meaning came back, as distinct from whether the body or
+the channel capacity did --- has no existing definition. Section~\ref{sec:protocol}
+supplies one.

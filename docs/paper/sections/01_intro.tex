@@ -1,0 +1,88 @@
+\section{Introduction}
+\label{sec:intro}
+
+Cut a planarian in half and each half regrows a whole animal. The body comes
+back. Whether anything the animal \emph{knew} comes back is a separate question,
+and for a distributed system it is a sharper one than it first appears: if
+knowledge is not stored anywhere in particular, then destroying a region does not
+delete a fact, it perturbs a computation that was being carried out everywhere at
+once.
+
+Neural cellular automata make that question askable. A single shared local update
+rule, applied by every cell to its own neighbourhood, grows a target morphology
+from a seed and regrows it after tissue loss
+\citep{mordvintsev2020growing}. There is no component to remove --- damage
+removes computation, and the system's response is to recompute rather than to
+restore from backup. What has never been asked of such a system is whether it can
+\emph{invent and hold a convention}: a mapping from things in the world to
+symbols, agreed with a partner, that could survive or fail to survive the
+destruction and regrowth of the substrate computing it.
+
+We ask exactly that. Two neural cellular automata grow from single seed cells and
+play a Lewis referential game \citep{lewis1969convention}: a sender observes a
+referent and emits a discrete symbol through a parameter-free consensus readout
+over its own cells; a receiver, which observes nothing else, must identify the
+referent. Then we cut the sender open, hold the receiver frozen and healthy, and
+watch what comes back.
+
+Freezing the receiver is what makes the measurement clean. An unchanged partner
+is a fixed semantic reference frame, so any drop in task accuracy is the sender's
+protocol drifting away from the meaning its partner was trained to read, rather
+than the two of them renegotiating.
+
+\paragraph{Thesis.} \emph{Regeneration restores the body and the channel
+capacity, but not the convention.} Morphological and semantic recovery are
+different events, and plotting them on the same axis separates them.
+
+Stated carefully, the claim is that the event
+%
+\begin{center}
+  \emph{body recovered} $\wedge$ \emph{still speaking a language} $\wedge$
+  \emph{no longer mutually intelligible}
+\end{center}
+%
+occurs, and occurs at a measurable rate. The middle clause is what makes this
+substantive rather than trivial. Without it the claim reduces to ``RGBA recovered
+but the hidden channels did not,'' which is a fact about linear algebra --- four
+of twenty-eight channels were supervised and the rest were not. Requiring that
+the regenerated organism still carries as much information about the referent as
+it did before rules out the deflationary reading that damage simply made it
+stupid.
+
+\paragraph{The measurement problem is the second contribution.} There is no
+existing definition of semantic recovery to borrow. Work on neural cellular
+automata measures recovery as pixel distance to a target morphology or as
+downstream task score; work on emergent communication has never needed the notion
+at all, because its agents are fixed-architecture networks that cannot be
+structurally damaged. Section~\ref{sec:protocol} supplies four operationally
+distinct recoveries --- morphological, behavioural, computational, semantic ---
+and a decomposition of the last into whether the system still speaks \emph{a}
+language, whether it speaks the \emph{same} one, and how much of any difference
+is pure relabeling.
+
+That machinery is not decoration. The most dangerous objection to the whole
+enterprise is that our readout is a mean over living cells, so deleting cells
+changes it even if every survivor computes exactly what it did before. We answer
+that twice: with a proposition showing that under full per-cell consensus,
+deletion \emph{provably cannot} flip the symbol
+(Proposition~\ref{prop:deletion}), and with an exact frozen-state control that
+separates mechanical pooling shift from genuine change in cell computation at
+zero additional cost (Section~\ref{sec:mechanical}).
+
+\paragraph{Contributions.}
+\begin{enumerate}\itemsep2pt
+\item The first study of emergent communication in which the communicating
+  agents are self-organizing, damage-regenerating substrates
+  (Section~\ref{sec:task}).
+\item A measurement protocol for \emph{semantic} recovery, including the
+  struct/align/relabel decomposition, the mechanical-versus-dynamical control,
+  and a confound analysis with a named control for each alternative explanation
+  (Section~\ref{sec:protocol}).
+\item A parameter-free consensus readout with a proved deletion-invariance
+  property and a mechanical $1/|\alive|$ bound on any single cell's influence,
+  verified against a matched negative control (Section~\ref{sec:readout}).
+\item A direct measurement of how far a morphology-trained cellular automaton
+  transports an injected signal --- a strong negative result that reshaped the
+  design, and one we expect to be useful to anyone building tasks on this
+  substrate (Section~\ref{sec:results-probe}).
+\end{enumerate}

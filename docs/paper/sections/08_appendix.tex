@@ -1,0 +1,85 @@
+\section{Confound analysis in full}
+\label{app:confounds}
+
+Table~\ref{tab:confounds} summarises; this appendix gives the operational detail
+for the controls that are not self-explanatory.
+
+\paragraph{Mechanical pooling shift.} Three independent answers, in order of
+strength. (i) Where per-cell consensus is full and the per-cell margin is
+positive everywhere, Proposition~\ref{prop:deletion} excludes the confound
+formally. We report consensus, agreement with the emitted symbol, and the minimum
+per-cell margin before and after damage at every $\Delta$, so a reader can see
+where the proposition applies. (ii) The frozen-state deletion control of
+Section~\ref{sec:mechanical}. (iii) Evaluating the same states under sum-pool,
+median-pool, and per-cell majority vote: if the phenomenon exists only under mean
+pooling it is an artifact.
+
+The pooling choice is not neutral, and the reason is worth stating. Under full
+consensus, mean-pool argmax is deletion-invariant but the logit \emph{magnitude}
+barely moves. Under sum-pool with dead cells contributing zero, deleting cells
+shrinks all logits, flattening the softmax and raising $\Ent(M|R)$ even when the
+argmax is stable. The pooling choice therefore determines whether damage
+manifests as a change of \emph{meaning} or a change of \emph{confidence} --- so
+we train with mean-pool and report the sum-pool readout on the same states as a
+diagnostic that separates the two.
+
+\paragraph{Confidence versus identity.} A sender may become less certain without
+changing its preferred symbol, which lowers sampled accuracy through a flatter
+softmax rather than through a changed code. We report argmax accuracy and sampled
+accuracy at every $\Delta$, decomposing the total change into a drift component
+(argmax flips) and an uncertainty component (the gap between the two), alongside
+the logit margin and $\Ent(M|R)$. A temperature sweep settles it: if the drop
+vanishes as $\tau \to 0$, it was confidence.
+
+\paragraph{Sensor destruction.} If the damage disk overlaps the sensor patch the
+referent information is literally deleted, which is trivial rather than
+interesting. We stratify every episode by sensor overlap and headline the
+non-overlapping stratum, and run sensor-targeted damage separately as an explicit
+contrast between destroying the input pathway and destroying the computation.
+
+\paragraph{Mid-regeneration.} ``The sender simply was not finished'' is excluded
+two ways: by running to $\Delta = 256 \gg T_{\mathrm{grow}} = 64$ and reporting
+the asymptote, and by reporting semantic metrics binned by IoU rather than by
+wall-clock, which definitionally controls for how far regeneration has
+progressed. We note the hazard in the second: binning on a post-treatment
+variable is a collider, so severity distributions are reported alongside, and the
+matched analysis is treated as supporting rather than primary.
+
+\paragraph{Training-condition confounds.} Arms that differ in training may differ
+in pre-damage accuracy, contaminating every comparison. Three layers: ANCOVA with
+pre-damage accuracy as a covariate; checkpoint matching to within 2 points; and a
+third arm trained with damage in the pool but with the task loss detached during
+damaged steps, which learns to regrow but never learns to communicate while
+damaged. That third arm is what makes the robustness claim mechanistic rather
+than correlational.
+
+\section{Sampling and cost}
+\label{app:sampling}
+
+Referents are enumerated rather than sampled. Damage placements are the dominant
+variance source and the bootstrap unit: $J = 32$ placements per condition, with
+the \emph{same} placement seeds reused across training conditions and damage
+magnitudes, since pairing is free and is the difference between a significant and
+a non-significant comparison at 8 seeds. Episodes per condition per seed are
+$N \times J \times K = 8 \times 32 \times 4 = 1024$.
+
+Evaluation is dense early and logarithmic later,
+$\Delta \in \{0,1,2,4,8,12,16,24,32,48,64,96,128,192,256\}$. At each $\Delta$ the
+receiver is run fresh from its own seed using the symbol emitted at that
+$\Delta$, which decouples receiver dynamics from sender time; the alternative --- a
+single continuous receiver rollout with a time-varying symbol --- entangles them
+and is materially harder to interpret.
+
+\section{Hardware and cost}
+\label{app:hardware}
+
+All experiments run on a single Apple M2 with 8\,GB of unified memory. Gradient
+checkpointing every 8 steps is required rather than optional: activation memory
+at $T=64$, batch 32 falls from 3300\,MB to 1110\,MB, and is then nearly flat in
+rollout length (1119\,MB at $T=128$). That flatness is what makes long rollouts
+affordable, which matters because information advances roughly half a cell per
+step under stochastic updates, so a short rollout would leave most of the body
+blind to the referent.
+
+The morphology run reported in Section~\ref{sec:results-morph} took 94 minutes
+for 6000 steps.

@@ -217,8 +217,10 @@ def train_step(st: TrainState, target: Tensor, rng: RNG, cfg: Config) -> dict[st
     if st.guard.observe(out):
         raise DeathReset(f"all cells dead for {st.guard.patience} consecutive steps")
 
-    loss = rgba_mse(out, target)
+    morph_loss = rgba_mse(out, target)
+    loss = morph_loss
     vote_loss = None
+    grad_ratio = float("nan")
     if referents is not None:
         from morphos.task.readout import per_cell_vote_loss
 
@@ -226,7 +228,13 @@ def train_step(st: TrainState, target: Tensor, rng: RNG, cfg: Config) -> dict[st
         # travel: a distant cell can only vote correctly if the signal reached it.
         alive_soft = st.model.alive_mask(out)
         vote_loss = per_cell_vote_loss(st.pool_readout, out, alive_soft, referents)
-        loss = loss + cfg.train.lambda_vote * vote_loss
+
+        if (st.step + 1) % cfg.train.log_interval == 0 or st.step == 0:
+            gm = torch.autograd.grad(morph_loss, st.model.fc1.weight, retain_graph=True)[0]
+            gv = torch.autograd.grad(vote_loss, st.model.fc1.weight, retain_graph=True)[0]
+            grad_ratio = (gv.norm() / gm.norm().clamp(min=1e-12)).item()
+
+        loss = morph_loss + cfg.train.lambda_vote * vote_loss
     st.opt.zero_grad(set_to_none=True)
     loss.backward()
     if cfg.train.grad_norm_per_tensor:
@@ -251,6 +259,8 @@ def train_step(st: TrainState, target: Tensor, rng: RNG, cfg: Config) -> dict[st
             dec = st.pool_readout.decision(out, a)
             extra = {
                 "vote_loss": float(vote_loss.item()),
+                "morph_loss": float(morph_loss.item()),
+                "grad_ratio": grad_ratio,
                 "vote_acc": (dec.cpu() == referents.cpu()).float().mean().item(),
                 "consensus": consensus(st.pool_readout, out, a).mean().item(),
                 "agreement": agreement(st.pool_readout, out, a).mean().item(),

@@ -1,0 +1,149 @@
+% MORPHOS bibliography.
+%
+% RULE: every entry here has been fetched and verified against its source.
+% Do not add an entry from memory. If you cannot open it, it does not go in.
+% Verification date: 2026-08-04.
+
+% ---------------------------------------------------------------------------
+% Substrate: the growing-NCA lineage
+% ---------------------------------------------------------------------------
+
+@article{mordvintsev2020growing,
+  title   = {Growing Neural Cellular Automata},
+  author  = {Mordvintsev, Alexander and Randazzo, Ettore and
+             Niklasson, Eyvind and Levin, Michael},
+  journal = {Distill},
+  year    = {2020},
+  doi     = {10.23915/distill.00023},
+  url     = {https://distill.pub/2020/growing-ca/},
+  note    = {Verified 2026-08-04: 16 channels, Sobel perception,
+             alive threshold 0.1, stochastic update rate 0.5}
+}
+
+@article{randazzo2020selfclassifying,
+  title   = {Self-classifying {MNIST} Digits},
+  author  = {Randazzo, Ettore and Mordvintsev, Alexander and
+             Niklasson, Eyvind and Levin, Michael and Greydanus, Sam},
+  journal = {Distill},
+  year    = {2020},
+  doi     = {10.23915/distill.00027.002},
+  url     = {https://distill.pub/2020/selforg/mnist/},
+  note    = {Verified 2026-08-04: 88.1\% of samples reach full per-cell
+             agreement at step 200 under L2 loss, vs 66.2\% under
+             cross-entropy; CE "pushes raw logit values indefinitely higher"}
+}
+
+% ---------------------------------------------------------------------------
+% Nearest misses: NCA with multiple organisms, identity, or "language"
+% ---------------------------------------------------------------------------
+
+@article{singh2026communication,
+  title        = {Communication Heterogeneity and Collective Consensus in
+                  Neural Cellular Automata},
+  author       = {Singh, Nishit},
+  journal      = {arXiv preprint arXiv:2606.21202},
+  year         = {2026},
+  url          = {https://arxiv.org/abs/2606.21202},
+  note         = {Verified 2026-08-04: NCA cells reach majority consensus on
+                  an unobservable global density; "languages" are
+                  subpopulations with tunable translation barriers}
+}
+
+@article{stovold2025identity,
+  title   = {Identity Increases Stability in Neural Cellular Automata},
+  author  = {Stovold, James},
+  journal = {arXiv preprint arXiv:2508.06389},
+  year    = {2025},
+  url     = {https://arxiv.org/abs/2508.06389},
+  note    = {Verified 2026-08-04: an identity layer stabilises NCA organisms
+             in close proximity; emergent movement in multi-identity models}
+}
+
+@article{berdica2026evolving,
+  title   = {Evolving Many Worlds: Towards Open-Ended Discovery in Petri Dish
+             {NCA} via Population-Based Training},
+  author  = {Berdica, Uljad and Foerster, Jakob and Hutter, Frank and
+             Zela, Arber},
+  journal = {arXiv preprint arXiv:2604.11248},
+  year    = {2026},
+  url     = {https://arxiv.org/abs/2604.11248},
+  note    = {Verified 2026-08-04. NOTE: this is NOT the Sakana PD-NCA paper --
+             it builds on that substrate. Cite \cite{sakana2026pdnca}
+             separately for PD-NCA itself.}
+}
+
+@misc{sakana2026pdnca,
+  title        = {Petri Dish Neural Cellular Automata},
+  author       = {{Sakana AI}},
+  year         = {2026},
+  howpublished = {\url{https://sakana.ai/pd-nca/}},
+  note         = {Verified 2026-08-04: multiple NCA agents coexist, compete and
+                  adapt in a shared environment via continual backpropagation}
+}
+
+@article{variengien2021towards,
+  title   = {Towards Self-Organized Control: Using Neural Cellular Automata to
+             Robustly Control a Cart-Pole Agent},
+  author  = {Variengien, Alexandre and Nichele, Stefano and Glover, Tom and
+             Pontes-Filho, Sidney},
+  journal = {arXiv preprint arXiv:2106.15240},
+  year    = {2021},
+  url     = {https://arxiv.org/abs/2106.15240},
+  note    = {Verified 2026-08-04: NCA cart-pole controller showing a
+             developmental phase, regeneration after damage, and robustness to
+             input deletion. The feasibility precedent for NCA computation
+             surviving damage -- but single-agent, no communication.}
+}
+
+@inproceedings{chowdhury2020escell,
+  title     = {{ESCELL}: Emergent Symbolic Cellular Language},
+  author    = {Chowdhury, Aritra and Kubricht, James R. and Sood, Anup and
+               Tu, Peter and Santamaria-Pang, Alberto},
+  booktitle = {IEEE International Symposium on Biomedical Imaging (ISBI)},
+  year      = {2020},
+  url       = {https://arxiv.org/abs/2007.09469},
+  note      = {Verified 2026-08-04: a genuine Lewis signalling game, but
+               "cellular" refers to biological cells in microscopy images and
+               the agents are standard CNNs. A false positive for this survey.}
+}
+
+% ---------------------------------------------------------------------------
+% Emergent communication: measurement standards
+% ---------------------------------------------------------------------------
+
+@inproceedings{lowe2019pitfalls,
+  title     = {On the Pitfalls of Measuring Emergent Communication},
+  author    = {Lowe, Ryan and Foerster, Jakob and Boureau, Y-Lan and
+               Pineau, Joelle and Dauphin, Yann},
+  booktitle = {Proceedings of the 18th International Conference on Autonomous
+               Agents and MultiAgent Systems (AAMAS)},
+  year      = {2019},
+  url       = {https://arxiv.org/abs/1903.05168},
+  note      = {Verified 2026-08-04: defines positive signalling and positive
+               listening, and shows agents can appear to communicate without
+               doing so. Source of the causal-influence-of-communication
+               standard this paper adopts.}
+}
+
+@inproceedings{chaabouni2020compositionality,
+  title     = {Compositionality and Generalization In Emergent Languages},
+  author    = {Chaabouni, Rahma and Kharitonov, Eugene and
+               Bouchacourt, Diane and Dupoux, Emmanuel and Baroni, Marco},
+  booktitle = {Proceedings of the 58th Annual Meeting of the Association for
+               Computational Linguistics (ACL)},
+  year      = {2020},
+  doi       = {10.18653/v1/2020.acl-main.407},
+  url       = {https://aclanthology.org/2020.acl-main.407/},
+  note      = {Verified 2026-08-04: finds no correlation between the degree of
+               compositionality of an emergent language and its ability to
+               generalize. Cited as the reason topographic similarity is
+               reported beside accuracy and never as a proxy for it.}
+}
+
+@book{lewis1969convention,
+  title     = {Convention: A Philosophical Study},
+  author    = {Lewis, David},
+  year      = {1969},
+  publisher = {Harvard University Press},
+  address   = {Cambridge, MA}
+}

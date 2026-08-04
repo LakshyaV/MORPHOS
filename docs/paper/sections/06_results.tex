@@ -1,0 +1,154 @@
+\section{Results}
+\label{sec:results}
+
+\subsection{The body: growth, persistence, regeneration}
+\label{sec:results-morph}
+
+The substrate must first do the known thing before it can be asked to do the new
+one. A single organism was trained for 6000 steps (94 minutes on an Apple M2,
+seed 0, no death-guard resets), growing for the first 1000 steps and then
+training persistence and regeneration from a sample pool.
+
+Both morphology gates pass (Table~\ref{tab:g1g2}). Growth reaches
+$\IoU = 0.9898$ at the training horizon $t=64$, with a 5th percentile of
+$0.9826$ over 128 rollouts, so the result is not carried by a good average over
+bad tails.
+
+The more informative number is $\IoU = 0.9993$ at $t=256$. The organism is
+\emph{better} at four times the training horizon than at the horizon itself, and
+holds its area to within 0.7\% of target. The target morphology is therefore a
+genuine attractor of the learned dynamics rather than a memorised trajectory that
+decays once the training window ends --- which is the property everything
+downstream depends on, since the damage experiment reads out long after $T_{\mathrm{grow}}$.
+
+Regeneration is unambiguous: after destroying a disk containing 30\% of alive
+cells, \textbf{all 256 trials recovered}, under the strict criterion of sustained
+recovery over 20 consecutive steps, with a median recovery time of 13 steps.
+Recovery was equally complete whether or not the destroyed disk covered the grid
+centre, which is worth recording ahead of the sensor-targeted damage arm: at this
+stage, position of damage does not matter for the body.
+
+\begin{table}[t]
+\centering
+\small
+\caption{Morphology gates. All values measured on the committed checkpoint;
+G1 over 128 rollouts, G2 over 256 damage trials.}
+\label{tab:g1g2}
+\begin{tabular}{@{}llrl@{}}
+\toprule
+& \textbf{Metric} & \textbf{Value} & \textbf{Threshold} \\
+\midrule
+\multirow{5}{*}{G1}
+& IoU at $t=64$ (mean)          & 0.9898 & $\geq 0.90$ \\
+& IoU at $t=64$ (5th pct.)      & 0.9826 & $\geq 0.85$ \\
+& RMSE at $t=64$                & 0.0109 & $\leq 0.05$ \\
+& IoU at $t=256$                & 0.9993 & $\geq 0.85$ \\
+& area ratio $|A_{256}|/|A_{64}|$ & 0.9931 & $[0.9, 1.1]$ \\
+\midrule
+\multirow{4}{*}{G2}
+& fraction recovered            & 1.0000 & $\geq 0.90$ \\
+& sustained 20 steps            & 1.0000 & reported \\
+& median recovery time          & 13 steps & --- \\
+& achieved severity             & 0.2982 & $0.30 \pm 0.02$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{What the substrate transports on its own}
+\label{sec:results-probe}
+
+Everything in Section~\ref{sec:task} rests on an assumption that had not been
+tested: that a signal injected at the sensor patch can cross the body at all. We
+measured it directly on the morphology-trained organism above, whose maximum
+geodesic radius is 9 cells.
+
+The probe injects each of the 8 bipolar referent codes into the sensor patch and
+measures, per cell and per step, the fraction of state variance explained by
+which code was injected. Bodies are grown once and shared across codes so the
+morphology is bit-identical, and the stochastic fire masks are shared across
+codes as well --- without that, between-code variance is contaminated by update
+noise rather than reflecting the injected signal. Distance is Chebyshev geodesic
+distance on the alive mask, which is exactly the NCA light cone.
+
+The result is stark. Variance explained collapses with distance:
+$0.951$ at the sensor patch, $0.494$ at one cell, $0.174$ at two, $0.039$ at
+three, and indistinguishable from zero by five. The propagation front, defined as
+the furthest ring exceeding a 5\% threshold, \textbf{stalls at $d=2$ from
+$t \approx 24$ onward and never advances again}, at a fitted speed of $0.039$
+cells per step against a body of radius 9. The body is never covered.
+
+\gated{the ridge-decoder analysis reported in the milestone notes ---
+per-ring decoding accuracy showing information reaching $d \approx 5$ rather than
+$d \approx 3$ --- has no committed implementation and cannot be regenerated from
+the saved probe artifact, which stores variance ratios rather than per-cell
+states. It is excluded from this paper until the decoder is written into the
+probe and re-run. Do not restore the table without the code}
+
+\paragraph{Why this is a lower bound, and what follows.} This organism was
+trained only to hold a shape. Nothing in its objective ever referenced the sensor
+channels, so it had no reason to relay anything; the measured range is what the
+substrate does \emph{incidentally}. The honest reading is that passive dynamics
+carry a referent partway across the body and the task must supply the rest.
+
+That reading changed three design decisions. It makes the per-cell vote loss
+load-bearing rather than merely an anti-centralisation device --- supervising
+distant cells is the only pressure that demands propagation, since a distant cell
+can be correct only if the signal arrived. It sets the body radius to 7 rather
+than 10, inside the measured envelope. And it motivates the broadcast precursor
+below, which tests the propagation question before paying for the full game.
+
+Building the probe before the game is what surfaced this. Measured instead as
+accuracy against rollout length, the same failure would have looked like ``needs
+more steps,'' and the fix would have been to lengthen the rollout --- against a
+problem that time alone does not solve.
+
+\subsection{Broadcast: buying propagation with a per-cell loss}
+\label{sec:results-broadcast}
+
+\gated{this run is still in progress at the time of writing; numbers below are
+from a live training log and will be replaced with a completed run and a proper
+held-out evaluation}
+
+The broadcast task supplies exactly the pressure the probe showed was missing.
+Warm-started from the morphology checkpoint above, with a body of radius 7 and
+every alive cell supervised to vote for the injected referent, per-cell vote
+accuracy rises from chance ($0.125$ on 8 referents) to above $0.90$, with
+cell-level consensus rising in step from $\approx0.25$ to $\approx0.89$ while the
+body holds at $\IoU \approx 0.88$.
+
+Consensus and accuracy rising together is the meaningful part. A megaphone
+solution would show accuracy rising while consensus stayed low, since a small
+loud region can carry the pooled decision without the rest of the body knowing
+anything. \gated{quorum fraction is implemented but has never been measured on a
+trained organism; it is the direct test of that claim and must be reported here}
+
+\paragraph{A measured conflict between body and message.} The weighting between
+the morphology loss and the vote loss is not a free parameter. At equal weight,
+the vote gradient dominates and the organism dissolves itself: accuracy climbs
+while $\IoU$ falls by half, trading the body for the message. The loss
+\emph{values} understate this badly --- they differ by an order of magnitude in
+the opposite direction --- so the balance has to be set by watching per-term
+gradient norms, not losses. \gated{this observation comes from a run that was
+deleted rather than archived, and the gradient-ratio logger has an off-by-one
+that records NaN on every logged step; both must be fixed and the sweep re-run
+before this paragraph can carry a number}
+
+\subsection{Protocol emergence}
+\label{sec:results-emergence}
+
+\gated{requires the full Lewis game with a receiver, a discrete channel, and
+cross-play across seeds. Gates G3 and G4 are specified in
+Section~\ref{sec:protocol} but not yet implemented. This section reports
+accuracy with Wilson intervals, debiased $\MI(M;R)$, effective vocabulary, the
+four mandatory interventions, causal influence of communication, and the
+emergence rate across seeds}
+
+\subsection{The dissociation}
+\label{sec:results-dissociation}
+
+\gated{the central experiment. Damage the sender with the receiver frozen and
+healthy, and measure morphological against semantic recovery on the same axis.
+Reports the recovery time courses, the dose-response map with the dissociation
+quadrant of Eq.~\ref{eq:h3} shaded, the mechanical-versus-dynamical decomposition
+of Section~\ref{sec:mechanical}, and the struct/align/relabel split. Not yet
+run}

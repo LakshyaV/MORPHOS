@@ -40,7 +40,12 @@ train:
   rollout_min: 64
   rollout_max: 96
 
-  lambda_vote: 1.0
+  # MEASURED: the vote-loss gradient is ~20x the morphology gradient on a warm
+  # model, so lambda_vote=1.0 let communication outvote the body 20:1 and the
+  # organism dissolved itself (IoU 0.52 -> 0.25 while accuracy hit 0.97).
+  # Parity is ~0.05; 0.03 leaves the body slightly favoured.
+  # Note the loss VALUES (0.036 vs 0.226) understate this badly -- watch grads.
+  lambda_vote: 0.03
   readout_dropout: 0.3
 
   log_interval: 50

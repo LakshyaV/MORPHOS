@@ -1,0 +1,89 @@
+\section{Discussion}
+\label{sec:discussion}
+
+\gated{this section is written against the thesis as stated. If the primary
+effect does not survive --- specifically, if the confidence interval on the
+semantic-versus-morphological recovery lag straddles zero --- the intended
+alternative framing is the permutation result: morphology and protocol recover at
+indistinguishable rates, but the recovered protocol is a \emph{permutation} of
+the original. That is arguably the more interesting finding, and the paper is
+structured so that adopting it replaces this section and one paragraph of
+Section~\ref{sec:intro} rather than requiring a restructure. The decision point
+is fixed in advance so it cannot be made retroactively to fit the data}
+
+\subsection{What a dissociation would mean}
+
+If morphology and meaning recover at different rates, the interesting consequence
+is not about cellular automata. It is that in a system where computation is
+genuinely distributed, structural repair and functional repair are separable
+processes, and a repair mechanism optimised for the first supplies no guarantee
+about the second. The organism regrows to specification and speaks a language it
+can no longer be understood in. Nothing in its morphological loss ever referred
+to the convention, so nothing pulled the convention back.
+
+The relabeling decomposition sharpens this. If the regenerated sender's code is a
+\emph{permutation} of the original, then the information survived and only the
+alignment was lost --- which is a statement about the arbitrariness of a
+convention, not about damage destroying knowledge. Reporting the split rather
+than a single agreement number is what makes those two outcomes distinguishable,
+and we regard the split as the more durable contribution of the two.
+
+\subsection{Limitations}
+
+\paragraph{Power.} With 8 seeds this study resolves only large effects
+($d \gtrsim 1.2$). We state this rather than letting a reader infer that
+non-significance means absence. Formal testing is not the norm in this subfield;
+we would rather do it and be candid about what it can and cannot detect.
+
+\paragraph{One body, one game.} Every result is on a single target morphology
+(a disk), $N=V=8$, and message length 1. The disk was chosen so geodesic distance
+is analytic and damage location parameterises cleanly, but rotational symmetry is
+a real risk we did not fully control for, and a single morphology cannot separate
+properties of this substrate from properties of this shape. Message length 1 also
+means compositionality is out of reach: at $L=1$ topographic similarity
+degenerates, which is why we do not report it.
+
+\paragraph{The readout could be doing the work.} Mean pooling architecturally
+imposes uniform participation on the vote channels, so ``communication is
+distributed'' risks being a tautology of the readout rather than a finding about
+the organism. Proposition~\ref{prop:deletion} and the frozen-state control
+address whether \emph{damage effects} are artifacts, but they do not by
+themselves establish that the distributedness is earned. The honest controls are
+within-architecture --- comparing the vote readout against the morphology readout
+under matched ablation, and normalising against an untrained organism --- and a
+learned-readout arm is required before any claim that the parameter-free readout
+is responsible for robustness. \gated{these arms}
+
+\paragraph{Damage is not surgery.} Our damage operators zero all channels in a
+disk. Real injury is not a disk, and the choice of operator plausibly interacts
+with what recovers. We parameterise severity by fraction of currently-alive cells
+rather than by radius, which at least prevents severity from being confounded
+with body size and regeneration state, but the shape of the wound remains a
+designed convenience.
+
+\subsection{Reproducibility}
+
+Every number in this paper traces to a committed artifact --- gate reports,
+training logs, and the raw probe field --- and figures regenerate from those logs
+rather than from a notebook. We hold ourselves to one rule that the propagation
+analysis in Section~\ref{sec:results-probe} initially violated: \textbf{a result
+without committed code that regenerates it is not a result}. The decoder analysis
+excluded there was excluded for exactly that reason, and its absence from this
+paper is deliberate.
+
+Determinism is asserted same-device only. CPU and GPU backends produce different
+streams from the same seed, so the device is part of run identity and is recorded
+with every run.
+
+\subsection{Future work}
+
+The immediate extensions are the ones this design deliberately cut for scope:
+damaging the receiver instead of the sender, which is the mirror experiment and
+tests whether the asymmetry is real; activation patching from the healthy twin
+into the regenerating organism, which would localise \emph{where} the semantic
+information was lost rather than only establishing that it was; and a
+compositional extension with 16 referents and message length 2, which is the
+smallest setting in which compositionality measures become meaningful. Movement
+and reinforcement learning were cut at the outset in favour of a fully
+differentiable game, and reintroducing them is the natural path toward organisms
+that must communicate to do something rather than to name something.

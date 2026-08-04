@@ -1,0 +1,29 @@
+\begin{abstract}
+Regenerating organisms restore their bodies after severe damage. Whether they
+restore what they \emph{knew} is a different question, and a sharper one when the
+knowing is distributed: computation that lives nowhere in particular cannot be
+deleted region by region, only perturbed. We study this in neural cellular
+automata, where one shared local update rule grows a body from a single cell and
+regrows it after tissue loss, so damage removes computation rather than a
+component. Two such organisms play a Lewis referential game --- a sender emits a
+discrete symbol through a parameter-free consensus readout over its own living
+cells, and a receiver that observes nothing else must identify the referent. We
+then damage the sender while holding the receiver frozen, so an unchanged partner
+acts as a fixed semantic reference frame and any lost accuracy is the sender's
+protocol drifting from the meaning its partner reads. Our thesis is that
+regeneration restores the body and the channel capacity but not the convention.
+%
+Because no definition of semantic recovery exists to borrow, we contribute one:
+four operationally distinct recoveries, a decomposition separating whether the
+system still speaks \emph{a} language from whether it speaks the \emph{same} one,
+and an exact zero-cost control separating genuine drift from the mechanical
+effect of averaging over fewer cells. We prove that under full per-cell
+consensus, cell deletion cannot flip the emitted symbol, converting the central
+confound from an argument into a theorem. Empirically the substrate grows and
+regenerates reliably (IoU 0.9898 at the training horizon, 0.9993 at four times
+it; 256 of 256 damage trials recover, median 13 steps), and we measure a limit
+that reshaped the design: a morphology-trained automaton transports an injected
+signal only about two cells before its propagation front stalls, against a body
+of radius nine. Communication across such a body must be trained for, not
+assumed. \gated{protocol emergence and the dissociation experiment}
+\end{abstract}

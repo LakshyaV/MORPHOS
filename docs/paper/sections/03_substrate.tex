@@ -1,0 +1,90 @@
+\section{Substrate}
+\label{sec:substrate}
+
+Both agents are growing neural cellular automata in the sense of
+\citet{mordvintsev2020growing}. A state is a $C \times 32 \times 32$ tensor. Every
+cell runs the same update rule on its own $3\times3$ neighbourhood; there is no
+central module, no global pooling inside the dynamics, and no cell has a
+privileged position. That property is not incidental --- it is what makes the
+question of this paper well-posed, because it means damage removes computation
+rather than removing a component.
+
+\paragraph{Channels.} We use $C=28$, allocated by role rather than by position:
+4 RGBA, 3 sensor, 8 vote, and 13 hidden for the sender. The receiver keeps the
+same width with a different split (8 sensor channels for the one-hot symbol, 8
+vote channels for its answer, 8 hidden). Channel~3 is alpha and defines
+occupancy.
+
+The budget is larger than the 16 channels of \citet{mordvintsev2020growing}, and
+deliberately so. Reserving 8 channels for votes out of 16 would leave 4 for
+morphogenesis, against the 12 that the original recipe needed for morphology
+alone. Capacity starvation of that kind fails silently: the organism trains, the
+body looks acceptable, and the protocol never emerges, with nothing in the loss
+curve to indicate which of the two is starving.
+
+\paragraph{Perception.} Each channel is convolved with three fixed, non-learned
+$3\times3$ kernels --- identity, Sobel-$x$, and Sobel-$y$ (the Sobel kernels
+scaled by $\nicefrac{1}{8}$) --- giving an $84$-dimensional perception vector per
+cell. The kernels are a registered buffer and never receive gradient.
+
+\paragraph{Update rule.} The perception vector passes through two $1\times1$
+convolutions, $84 \to 128 \to 28$, with a ReLU between them. The output is a
+\emph{residual} update, gated by a per-cell stochastic fire mask at rate $0.5$,
+after which the alive mask is reapplied:
+%
+\begin{equation}
+  x \leftarrow \big(x + f_{\theta}(\mathrm{perceive}(x)) \odot \mathrm{fire}\big)
+  \odot \big(\alive_{\mathrm{pre}} \odot \alive_{\mathrm{post}}\big).
+\end{equation}
+%
+A cell is alive if any neighbour in its $3\times3$ window carries
+$\alpha > 0.1$, computed as a max-pool; the dilation is what permits outward
+growth. Requiring a cell to be alive both before and after the update is what
+prevents cells reanimating in isolation.
+
+The second convolution is bias-free and \emph{zero-initialised}, so an untrained
+organism is exactly a do-nothing update rule and returns its seed unchanged.
+This matters for the death guard described below.
+
+\paragraph{Size.} The whole organism is \textbf{14{,}464 trainable parameters}
+(10{,}752 + 128 in the first convolution, 3{,}584 in the second), plus a fixed
+756-element perception buffer. Everything reported in this paper --- growing a
+body, holding it against perturbation, regenerating from tissue loss, and
+carrying a symbol across the body --- is done by that one shared local rule.
+
+\paragraph{Target morphology.} The target is a filled antialiased disk of flat
+colour. A disk is used rather than the emoji of
+\citet{mordvintsev2020growing} because geodesic distance from the centre is then
+analytic and damage location parameterises cleanly as (radius, angle), both of
+which the measurements in Section~\ref{sec:protocol} depend on.
+
+Critically, \textbf{the target body is identical for every referent}. The
+referent enters only through the sensor channels. If the target varied with the
+referent, morphological and semantic recovery would be the same variable and the
+hypotheses of this paper would be vacuous rather than merely false.
+
+\paragraph{Training.} Adam at $2\times10^{-3}$, dropping to $2\times10^{-4}$ at
+step 2000, with per-parameter-tensor $L_2$ gradient normalisation --- each tensor
+normalised by its own norm, which the original work reports as necessary to
+prevent late-training loss spikes. Rollout length is drawn per step from
+$U[64,96]$. Gradient checkpointing every 8 steps is mandatory rather than an
+optimisation: activation memory falls from 3300\,MB to 1110\,MB at $T=64$ on an
+8\,GB machine, and is then nearly independent of rollout length (1119\,MB at
+$T=128$), which is what makes the long rollouts of Section~\ref{sec:task}
+affordable.
+
+Persistence and regeneration are trained with a sample pool of 1024 states: each
+step samples 32, ranks them by loss, reseeds the worst 4, and damages the best
+12. Damaging the best rather than a random subset is deliberate --- damaging a
+pattern that is already failing does not test regeneration.
+
+\paragraph{The death guard.} If every cell dies, the state is identically zero
+and the alive mask is a hard threshold with no gradient, so the gradient into the
+weights is exactly zero; with per-tensor normalisation, $0/(0+\epsilon)$ stays
+zero while Adam's moments decay. The model is then frozen permanently. This is a
+trap with a measure-zero escape rather than a local minimum that annealing
+escapes, so it is detected explicitly (max alpha below threshold for 3
+consecutive steps) and the run is rebuilt from a fresh weight seed with a fresh
+optimiser --- stale Adam moments would immediately re-kill it. The guard cannot
+fire spuriously because the zero-initialised second convolution returns the seed
+exactly. No run reported in this paper triggered it.

@@ -1,0 +1,227 @@
+\section{Measuring semantic recovery}
+\label{sec:protocol}
+
+The neural-cellular-automata literature measures recovery as pixel distance to a
+target, or as a downstream task score. The emergent-communication literature has
+never needed a notion of recovery at all, because its agents cannot be
+structurally damaged. Neither supplies what this question requires. This section
+is the second contribution of the paper: a set of definitions under which
+``the protocol came back'' is a number rather than an impression.
+
+\paragraph{Notation.} Damage occurs at $t=0$; $\dmg$ and $\pdmg$ denote the state
+immediately before and after, and $\Delta$ counts steps since. Every damaged
+episode has a \textbf{matched healthy twin} --- identical seed, referent, and RNG
+stream, no damage. Recovery is measured against the twin as well as against the
+pre-damage state, because a healthy organism also drifts over 256 steps and that
+drift must not be counted as damage.
+
+\subsection{Four recoveries, deliberately distinct}
+
+\begin{description}
+\item[Morphological.]
+  $\MR_t = (\IoU_t - \IoU_\pdmg)/(\IoU_\dmg - \IoU_\pdmg)$. Recovered when
+  $\IoU_t \geq 0.95\,\IoU_\dmg$, RMSE within $1.1\times$ its pre-damage value,
+  and area ratio in $[0.9, 1.1]$ --- all three \emph{sustained for 20
+  consecutive steps}. The sustain requirement eliminates transient touch-and-go
+  crossings, which otherwise corrupt every recovery-time statistic.
+
+\item[Behavioural.]
+  $\BR_t = (\mathrm{Acc}_t - 1/N)/(\mathrm{Acc}_\dmg - 1/N)$. Chance correction
+  is mandatory: reporting that accuracy ``recovered to 50\%'' is meaningless when
+  chance is 12.5\%. Recovery is declared by a one-sided \emph{non-inferiority}
+  test at margin $\delta = 0.05$, not by failure to reject a null --- failing to
+  reject is not evidence of recovery.
+
+\item[Computational.] Behaviour can be right for the wrong reasons, so we also
+  ask whether the same cells went back to the same job: centered-logit recovery
+  $\geq 0.9$, representational similarity $\geq 0.90$ over hidden channels only,
+  and per-cell field correlation $\geq 0.8$. Logits are centered first because
+  softmax is shift-invariant and an uncentered offset would read as semantic
+  change.
+
+\item[Semantic.]
+  $\SIA_t = \frac{1}{N}\sum_r \indicator[\hat\sigma_t(r) = \hat\sigma_\dmg(r)]$,
+  macro-averaged over referents so that referent frequency cannot distort it.
+\end{description}
+
+These form a \emph{lattice, not a total order}: computational recovery implies
+semantic implies behavioural, but not conversely. A permuted code is structurally
+intact and behaviourally dead.
+
+\subsection{The split that carries the paper}
+
+Semantic recovery divides into two questions that are usually conflated:
+%
+\begin{align}
+  \mathrm{struct}_t  &= \MI_t(M;R) \,/\, \MI_\dmg(M;R), \\
+  \mathrm{align}_t   &= \SIA_t, \\
+  \mathrm{relabel}_t &= \SIA^{\mathrm{perm}}_t - \SIA_t .
+\end{align}
+%
+The first asks \emph{does it still speak a language?} and is invariant to any
+relabeling of the vocabulary. The second asks \emph{does it speak the same
+language?} and is not. The third measures how much of any loss in the second is
+pure relabeling rather than lost structure.
+%
+$\SIA^{\mathrm{perm}}$ maximises agreement over all $V! = 40{,}320$ vocabulary
+permutations. We compute it with the Hungarian algorithm on the $V\times V$
+pre/post confusion matrix, which is an \emph{exact} maximum in $O(V^3)$ --- this
+is a linear assignment problem, not a greedy match, and we state so explicitly
+because a reader is right to wonder.
+
+The dissociation hypothesis is then the event
+%
+\begin{equation}
+  \label{eq:h3}
+  \MR_t \geq 0.95 \;\wedge\; \mathrm{struct}_t \geq 0.90 \;\wedge\;
+  \mathrm{align}_t < 0.60 ,
+\end{equation}
+%
+that is: body perfect, still linguistic, no longer mutually intelligible with its
+unchanged partner.
+
+The $\mathrm{struct} \geq 0.90$ clause is doing essential work. Without it, the
+claim degenerates into ``RGBA recovered but the hidden channels did not,'' which
+is a linear-algebra triviality --- RGBA is 4 of 28 channels and the other 24 were
+never constrained to recover. Requiring that the protocol still carries its
+information is what rules out ``damage just made it stupid'' and makes the result
+substantive.
+
+\subsection{Mechanical versus dynamical drift}
+\label{sec:mechanical}
+
+The most dangerous objection to everything above is that the readout is a mean
+over alive cells, so deleting 30\% of them changes the mean even if every
+survivor computes exactly what it did before. If that accounts for the whole
+effect, there is no paper.
+
+Proposition~\ref{prop:deletion} excludes it wherever consensus is full. The
+general case is settled by an exact control that costs nothing. Take the healthy
+pre-damage state, apply the \emph{same} deletion mask, and recompute the pooled
+readout \textbf{without running any dynamics}:
+%
+\begin{equation}
+  \pooled^{\mathrm{mech}} = \mathrm{pool}\big(\vote_\dmg,\; \alive_\dmg \setminus S\big).
+\end{equation}
+%
+Comparing $\pooled^{\mathrm{mech}}$ against the pre-damage code isolates the pure
+pooling artifact; comparing the true post-damage code against
+$\pooled^{\mathrm{mech}}$ isolates genuine change in cell computation. No forward
+passes are required, since the frozen state is already stored.
+
+We report both components at every $\Delta$, alongside per-cell consensus and the
+minimum per-cell margin, so that a reader raising the pooling objection can be
+answered by pointing at a panel rather than at an argument.
+
+\subsection{Verifying the protocol is causally real}
+
+A protocol that correlates with the referent is not yet a protocol that is
+\emph{used}. Following \citet{lowe2019pitfalls}, four interventions are treated
+as mandatory rather than optional, and each is a one-line change in the
+evaluation loop:
+
+\begin{enumerate}\itemsep2pt
+\item \textbf{Remove the message.} Accuracy unchanged $\Rightarrow$ no
+  communication, or a leak.
+\item \textbf{Random symbol} resampled from the marginal. Accuracy unchanged
+  $\Rightarrow$ the protocol is not causally real.
+\item \textbf{Permute the vocabulary.} Accuracy holds $\Rightarrow$ the receiver
+  reads message \emph{presence}, not identity.
+\item \textbf{Cross-play across seeds.} High cross-play accuracy $\Rightarrow$ no
+  convention emerged. This also supplies the ``totally incompatible'' reference
+  scale that makes any post-damage drift number interpretable.
+\end{enumerate}
+
+We report causal influence of communication by \emph{enumerating} all $V$
+counterfactual symbols rather than sampling them, which the single-symbol setting
+makes exact --- a small improvement on the estimator of \citet{lowe2019pitfalls}.
+Because the symbol is randomised within an episode, conditioning on it equals
+intervening on it, so this is a causal quantity and not a correlation.
+
+Two automated assertions guard the channel itself. \textbf{Purity}: the set of
+distinct symbol tensors reaching the receiver must have cardinality exactly $V$;
+any violation means an analog side channel and invalidates every discrete measure
+in the paper. \textbf{Data processing}: the pipeline is a Markov chain
+$R \to M \to \hat{R}$, so $\MI(\hat{R};R) \leq \MI(M;R)$ must hold; measuring the
+reverse means the referent is reaching the receiver by some other path.
+
+We do not report topographic similarity. At message length 1, edit distance is
+binary and topsim degenerates into a point-biserial correlation. We report
+attribute-wise mutual information instead, and say why here rather than printing
+a number that resembles the one in \citet{chaabouni2020compositionality} without
+meaning the same thing. That work also found no correlation between
+compositionality and generalization across their settings, which is the reason
+any such metric belongs beside accuracy rather than standing in for it.
+
+\subsection{Confounds}
+
+The claim under attack is: \emph{damage the sender, freeze the receiver,
+therefore the accuracy drop measures semantic drift.} Table~\ref{tab:confounds}
+lists every alternative explanation we could construct and the control for each.
+Full detail is in Appendix~\ref{app:confounds}.
+
+\begin{table}[t]
+\centering
+\small
+\caption{Alternative explanations and their controls.}
+\label{tab:confounds}
+\begin{tabular}{@{}p{0.30\linewidth}p{0.63\linewidth}@{}}
+\toprule
+\textbf{Alternative explanation} & \textbf{Control} \\
+\midrule
+Mechanical pooling shift &
+  Proposition~\ref{prop:deletion}; frozen-state deletion decomposition
+  (\S\ref{sec:mechanical}); robustness across sum-, median- and majority-pool \\
+Lower confidence, not changed meaning &
+  Report argmax and sampled accuracy at every $\Delta$; logit margin;
+  $\Ent(M|R)$; temperature sweep --- if the drop vanishes as $\tau \to 0$ it is
+  confidence, not code \\
+The sender simply was not finished &
+  Run to $256 \gg T_{\mathrm{grow}}=64$; report semantics binned by IoU, which
+  definitionally excludes ``not done yet''; sham ($f=0$) control \\
+Damage destroyed the \emph{sensor} &
+  Stratify by sensor overlap and headline the non-overlapping stratum; run
+  sensor-targeted damage as an explicit contrast \\
+Some referents are just harder &
+  Never report only the mean; referent~$\times~\Delta$ heatmap; mixed-effects
+  model with referent, placement and seed as random effects \\
+Damage-trained models are simply better models &
+  ANCOVA on pre-damage accuracy; checkpoint matching to $\pm2$ points; and a
+  third arm trained with damage but with the task loss detached \\
+The receiver was not actually frozen &
+  Hash receiver parameters before and after; assert identical initial state and
+  RNG stream \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Statistical plan}
+
+\textbf{The seed is the unit of analysis} for every cross-condition claim.
+Episodes, damage placements, and referents are nested within seeds; treating
+episodes as independent samples is pseudoreplication, and it is common in this
+literature. We compute a per-seed summary and infer across seeds.
+
+Damage placement is the bootstrap unit for semantic identity agreement, because
+$\SIA$ within a placement is a binomial with $n=N=8$ and referents within a
+placement are correlated. We bootstrap over placements, never over referents.
+
+Recovery times are right-censored --- some episodes never recover --- so we use
+Kaplan--Meier with censoring rather than dropping those episodes or imputing the
+horizon, both of which bias every mean. Mutual information is permutation
+debiased against 1000 label shuffles; the plug-in estimator is upward biased by
+roughly 0.069 bits at $N=V=8$, $n=512$, which is not negligible against the
+effects of interest. Entropy carries a Miller--Madow correction.
+
+Four pre-registered primary tests, one per hypothesis, with Holm--Bonferroni at
+$\alpha = 0.05$; everything else is labelled exploratory and reported with effect
+sizes. \textbf{At 8 seeds this study is powered only for large effects}
+($d \gtrsim 1.2$), and we state that rather than letting a reader infer
+otherwise. Formal significance testing is not the norm in this subfield; doing it
+while being candid about power is intended as a methodological contribution
+rather than statistical decoration.
+
+Finally, we report the \textbf{protocol emergence rate} --- the fraction of seeds
+that learn any protocol at all --- per training condition, with all seeds
+included and failures counted. Emergent-communication papers routinely omit this,
+and it is itself a result.
