@@ -8,3 +8,9 @@ __pycache__/
 *.npz
 *.pt
 .DS_Store
+
+# Third-party reference implementations consulted during research belong in a
+# scratch directory, never in the repo. Guard against `git add -A` sweeping them in.
+/basic_*.py
+/cmx_*
+/*.html
