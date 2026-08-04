@@ -47,8 +47,8 @@ def iou(a: Tensor, b: Tensor) -> Tensor:
     the meaningful value for a dead organism.
     """
     a, b = _as_bool(a), _as_bool(b)
-    inter = (a & b).flatten(1).sum(dim=1).to("cpu", torch.float64)
-    union = (a | b).flatten(1).sum(dim=1).to("cpu", torch.float64)
+    inter = (a & b).flatten(1).sum(dim=1).cpu().double()
+    union = (a | b).flatten(1).sum(dim=1).cpu().double()
     return torch.where(union > 0, inter / union.clamp(min=1), torch.zeros_like(union))
 
 
@@ -65,13 +65,13 @@ def rmse(x: Tensor, target: Tensor, mask: Tensor | None = None) -> Tensor:
     recovery metric in docs/PROTOCOL.md, where empty background is definitionally
     irrelevant.
     """
-    err = (x[:, :4] - target).to("cpu", torch.float64).pow(2)
+    err = (x[:, :4] - target).cpu().double().pow(2)
     if mask is None:
         return err.mean(dim=(1, 2, 3)).sqrt()
     m = _as_bool(mask).to("cpu")
     if m.shape[0] == 1 and err.shape[0] > 1:
         m = m.expand(err.shape[0], -1, -1, -1)
-    counts = m.flatten(1).sum(dim=1).to(torch.float64).clamp(min=1) * 4
+    counts = m.flatten(1).sum(dim=1).double().clamp(min=1) * 4
     return (err * m).sum(dim=(1, 2, 3)).div(counts).sqrt()
 
 
