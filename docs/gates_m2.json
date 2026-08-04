@@ -1,0 +1,25 @@
+[
+  {
+    "name": "G1_growth_persistence",
+    "passed": true,
+    "m_iou_64_mean": 0.9898028677068174,
+    "m_iou_64_p5": 0.9826437789750658,
+    "m_rmse_64_mean": 0.01092650993963656,
+    "m_rmse_64_union": 0.018447992142215732,
+    "m_iou_256_mean": 0.999269272245239,
+    "m_area_ratio_mean": 0.9930840659953724,
+    "m_area_ratio_in_band_frac": 1.0
+  },
+  {
+    "name": "G2_regeneration",
+    "passed": true,
+    "m_recovered_frac": 1.0,
+    "m_sustained20_frac": 1.0,
+    "m_best_iou_mean": 0.9974308542354122,
+    "m_severity_within_tol_frac": 1.0,
+    "m_severity_mean": 0.2981934300623834,
+    "m_tau_recover_median": 13.0,
+    "m_recovered_frac_centre_covered": 1.0,
+    "m_recovered_frac_centre_spared": 1.0
+  }
+]

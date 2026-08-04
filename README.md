@@ -22,13 +22,29 @@ complete, final training run in progress.
 - [x] Sample pool, damage operators, gates G1/G2
 - [x] Frame rendering and mp4 output
 - [x] Propagation probe
-- [ ] Full 6000-step run passing G1 and G2 + `media/regen.mp4`
+- [x] Full 6000-step run — **G1 and G2 both PASS** + `media/regen.mp4`
 - [ ] Lewis referential game (Milestone 3)
 
 88 tests, `make fast` under 30 s on CPU.
 
-Growing regime verified on device: loss 0.158 → 0.0003, IoU 0.003 → **0.990**,
-alive count converging to 338 against a target of 341.
+**Milestone 2 result** (full numbers in [`docs/RESULTS_M2.md`](docs/RESULTS_M2.md)):
+
+| | | |
+|---|---:|---|
+| G1 growth | IoU **0.9898** at t=64 | need ≥ 0.90 |
+| G1 persistence | IoU **0.9993** at t=256 | need ≥ 0.85 |
+| G2 regeneration | **100%** of 256 trials recovered | need ≥ 90% |
+| G2 recovery time | median **13 steps** after losing 30% of cells | — |
+
+The organism scores *higher* at four times the training horizon than at the
+horizon itself, so the target shape is a genuine attractor rather than a
+memorised trajectory.
+
+The propagation probe returned the milestone's most consequential finding: a
+signal injected at the sensor patch is linearly decodable out to only ~5 cells,
+against a body radius of 9. That is a lower bound — this model was never asked to
+relay anything — but it means Milestone 3 must actively build the pathway rather
+than assume it. See `docs/RESULTS_M2.md` for what changes as a result.
 
 ## Setup
 
