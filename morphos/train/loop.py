@@ -96,11 +96,22 @@ def build_state(cfg: Config, *, device: torch.device, weight_seed: int) -> Train
     sched = torch.optim.lr_scheduler.MultiStepLR(
         opt, milestones=list(cfg.train.lr_milestones), gamma=cfg.train.lr_gamma
     )
+    seed = model.seed_state(1, device=device)
+
+    # Allocated lazily: a Growing-only run should not pay 117 MB for a pool it
+    # will never touch.
+    pool = None
+    if cfg.train.pool_from_step is not None:
+        from morphos.substrate.pool import SamplePool
+
+        pool = SamplePool(seed, cfg.train.pool_size, device=device)
+
     return TrainState(
         model=model,
         opt=opt,
         sched=sched,
-        seed_state=model.seed_state(1, device=device),
+        seed_state=seed,
+        pool=pool,
         guard=DeathGuard(
             threshold=cfg.guard.death_threshold, patience=cfg.guard.death_patience
         ),
@@ -285,6 +296,8 @@ def train(
             )
             st_new.n_resets = st.n_resets
             st_new.rng = make_rng(cfg.seed + st.n_resets, device)
+            if st_new.pool is not None:
+                st_new.pool.reset()  # the old pool is full of corpses
             st = st_new
             ema = None
             continue
