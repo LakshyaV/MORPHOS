@@ -12,13 +12,23 @@ not the convention.*
 
 ## Status
 
-Day 1–2 complete: substrate implemented and verified, environment benchmarked.
+**Milestone 1** (substrate) complete. **Milestone 2** (grow → damage → regrow) code
+complete, final training run in progress.
 
-- [x] NCA substrate (`morphos/substrate/nca.py`) — 10 unit tests, deterministic
+- [x] NCA substrate — deterministic, light-cone verified
 - [x] Device benchmark and memory profile
-- [ ] Morphology training + growth/persistence gate G1
-- [ ] Damage/regeneration + gate G2
-- [ ] Lewis referential game + gate G3
+- [x] Target morphologies + morphology metrics
+- [x] Config system, training loop, JSONL logging, checkpointing
+- [x] Sample pool, damage operators, gates G1/G2
+- [x] Frame rendering and mp4 output
+- [x] Propagation probe
+- [ ] Full 6000-step run passing G1 and G2 + `media/regen.mp4`
+- [ ] Lewis referential game (Milestone 3)
+
+88 tests, `make fast` under 30 s on CPU.
+
+Growing regime verified on device: loss 0.158 → 0.0003, IoU 0.003 → **0.990**,
+alive count converging to 338 against a target of 341.
 
 ## Setup
 
