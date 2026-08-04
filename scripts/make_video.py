@@ -12,34 +12,12 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from morphos.config import Config, load_config
 from morphos.eval.metrics import alive_count, body_mask, iou
 from morphos.seeding import make_rng
-from morphos.substrate.nca import SENDER_LAYOUT, NCAOrganism
 from morphos.task.targets import build_target
-from morphos.train.checkpoint import config_from, load
-from morphos.viz.frames import ascii_preview, side_by_side, to_frames
+from morphos.viz.frames import ascii_preview, to_frames
 from morphos.viz.video import write_mp4
-
-
-def build_from_ckpt(ckpt_path: Path, device: torch.device) -> tuple[NCAOrganism, Config]:
-    raw = torch.load(ckpt_path, map_location="cpu", weights_only=False)
-    cfg_dict = config_from(raw)
-    if cfg_dict is None:
-        raise SystemExit(f"{ckpt_path} has no embedded config")
-    cfg = Config(**{})  # defaults, then patch the fields we need
-    grid = cfg_dict["nca"]["grid"]
-    hidden = cfg_dict["nca"]["hidden"]
-    model = NCAOrganism(
-        layout=SENDER_LAYOUT,
-        hidden=hidden,
-        grid=grid,
-        fire_rate=cfg_dict["nca"]["fire_rate"],
-        alive_threshold=cfg_dict["nca"]["alive_threshold"],
-    ).to(device)
-    model.load_state_dict(raw["model"])
-    model.eval()
-    return model, cfg_dict
+from morphos.train.checkpoint import load_organism
 
 
 def main() -> None:
@@ -57,7 +35,7 @@ def main() -> None:
 
     device = torch.device(args.device)
     ckpt_path = Path(args.ckpt)
-    model, cfg_dict = build_from_ckpt(ckpt_path, device)
+    model, cfg_dict, step = load_organism(ckpt_path, device)
     grid = cfg_dict["nca"]["grid"]
 
     target = build_target(

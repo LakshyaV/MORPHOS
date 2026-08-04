@@ -15,26 +15,10 @@ from pathlib import Path
 import torch
 
 from morphos.eval.gates import check_g1, check_g2
-from morphos.substrate.nca import SENDER_LAYOUT, NCAOrganism
 from morphos.task.targets import build_target
-from morphos.train.checkpoint import config_from
+from morphos.train.checkpoint import load_organism
 
 
-def load_model(ckpt_path: Path, device: torch.device):
-    raw = torch.load(ckpt_path, map_location="cpu", weights_only=False)
-    cfg = config_from(raw)
-    if cfg is None:
-        raise SystemExit(f"{ckpt_path} carries no config")
-    model = NCAOrganism(
-        layout=SENDER_LAYOUT,
-        hidden=cfg["nca"]["hidden"],
-        grid=cfg["nca"]["grid"],
-        fire_rate=cfg["nca"]["fire_rate"],
-        alive_threshold=cfg["nca"]["alive_threshold"],
-    ).to(device)
-    model.load_state_dict(raw["model"])
-    model.eval()
-    return model, cfg, raw.get("step")
 
 
 def main() -> None:
@@ -48,7 +32,7 @@ def main() -> None:
     args = p.parse_args()
 
     device = torch.device(args.device)
-    model, cfg, step = load_model(Path(args.ckpt), device)
+    model, cfg, step = load_organism(Path(args.ckpt), device)
     target = build_target(
         cfg["target"]["shape"], cfg["nca"]["grid"],
         radius=cfg["target"]["radius"], edge=cfg["target"]["edge"],

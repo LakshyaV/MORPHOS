@@ -18,7 +18,7 @@ import torch
 from morphos.eval.probe import ETA2_THRESHOLD, run_probe
 from morphos.seeding import make_rng
 from morphos.substrate.nca import SENDER_LAYOUT
-from scripts.evaluate import load_model
+from morphos.train.checkpoint import load_organism
 
 
 def main() -> None:
@@ -34,7 +34,7 @@ def main() -> None:
     args = p.parse_args()
 
     device = torch.device(args.device)
-    model, cfg, step = load_model(Path(args.ckpt), device)
+    model, cfg, step = load_organism(Path(args.ckpt), device)
 
     res = run_probe(
         model, SENDER_LAYOUT,

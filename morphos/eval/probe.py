@@ -98,14 +98,18 @@ def _eta_squared(states: Tensor, n_codes: int, n_noise: int) -> Tensor:
     total, i.e. the fraction of each cell's variance explained by which code was
     injected.
     """
+    # Computed in float32 on-device (MPS has no float64) and widened only at the
+    # end. Exactness where it matters is preserved: if the code has not reached a
+    # cell its states are bit-identical across codes, so the between-group term is
+    # exactly 0 in float32 too -- which is what the light-cone test asserts.
     c, h, w = states.shape[1:]
-    s = states.view(n_codes, n_noise, c, h, w).double()
+    s = states.view(n_codes, n_noise, c, h, w)
     mu_r = s.mean(dim=1)  # (R,C,H,W)
     mu = mu_r.mean(dim=0, keepdim=True)  # (1,C,H,W)
 
     between = ((mu_r - mu) ** 2).mean(dim=0).sum(dim=0)  # (H,W)
     within = ((s - mu_r.unsqueeze(1)) ** 2).mean(dim=(0, 1)).sum(dim=0)  # (H,W)
-    return between / (between + within).clamp(min=1e-12)
+    return (between / (between + within).clamp(min=1e-12)).cpu().double()
 
 
 @torch.no_grad()
@@ -152,7 +156,7 @@ def run_probe(
             # Hard write. At t == t_inject we simply STOP writing; zeroing instead
             # would be a second injection event.
             x[:, layout.sensor, sl[0], sl[1]] = code_batch.view(batch, -1, 1, 1)
-        eta_frames.append(_eta_squared(x, n_codes, n_noise).cpu())
+        eta_frames.append(_eta_squared(x, n_codes, n_noise))
 
         # One mask per NOISE draw, shared across all codes. Without this, two codes
         # differ by their fire masks as well as by the code, and the between-group

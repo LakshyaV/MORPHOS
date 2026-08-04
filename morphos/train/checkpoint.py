@@ -113,3 +113,32 @@ def latest(run_dir: str | Path) -> Path | None:
 def config_from(ckpt: dict) -> dict | None:
     raw = ckpt.get("config_json")
     return json.loads(raw) if raw else None
+
+
+def load_organism(
+    path: str | Path, device: torch.device | str = "cpu"
+) -> tuple[Any, dict, int | None]:
+    """Rebuild a trained organism straight from a checkpoint.
+
+    Lives here rather than in a script so evaluate / make_video / probe all share
+    one loader -- scripts importing each other is not a package layout.
+
+    -> (model in eval mode, config dict, step)
+    """
+    from morphos.substrate.nca import SENDER_LAYOUT, NCAOrganism
+
+    raw = torch.load(Path(path), map_location="cpu", weights_only=False)
+    cfg = config_from(raw)
+    if cfg is None:
+        raise ValueError(f"{path} carries no embedded config")
+
+    model = NCAOrganism(
+        layout=SENDER_LAYOUT,
+        hidden=cfg["nca"]["hidden"],
+        grid=cfg["nca"]["grid"],
+        fire_rate=cfg["nca"]["fire_rate"],
+        alive_threshold=cfg["nca"]["alive_threshold"],
+    ).to(device)
+    model.load_state_dict(raw["model"])
+    model.eval()
+    return model, cfg, raw.get("step")
