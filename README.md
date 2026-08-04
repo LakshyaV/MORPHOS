@@ -62,6 +62,41 @@ Long rollouts are therefore affordable, which matters because information
 propagates only ~0.5 cells/step under stochastic updates — a 24-step rollout
 would reach ~12 cells and leave most of the body blind to the referent.
 
+## The science
+
+The full design is in `docs/`, and it is the substance of this project — the
+code is downstream of it.
+
+- **[`docs/DESIGN.md`](docs/DESIGN.md)** — the research contribution and why the
+  gap is real; substrate choice argued against alternatives; the four
+  operational definitions of recovery; hypotheses H1–H4; how a centralized
+  module is prevented from secretly solving the task; baselines and ablations;
+  failure modes with a diagnostic for each; pass/fail gates; compute budget;
+  staged roadmap.
+- **[`docs/PROTOCOL.md`](docs/PROTOCOL.md)** — the experimental protocol:
+  exact formulas for every metric and estimator, the damage factorial and which
+  cells are actually run, confound analysis with a control for each alternative
+  explanation, the intervention suite ranked by necessity, the statistical plan,
+  and the numeric pass/fail gates.
+
+### The question
+
+Damage the sender, keep the receiver frozen and healthy, and the receiver
+becomes a fixed semantic reference frame: any drop in task accuracy is the
+sender's protocol drifting away from the meaning its partner was trained to
+read. Then plot morphological recovery and semantic recovery on the same axis.
+
+The claim under test is that those two curves come apart — formally, that the
+event `MR ≥ 0.95 ∧ struct ≥ 0.90 ∧ align < 0.60` occurs: body perfect, still
+speaking a language, but no longer mutually intelligible with its unchanged
+partner.
+
+The naive version of this claim ("RGBA recovered but the hidden channels
+didn't") is a linear-algebra triviality, since RGBA is 4 of 28 channels and the
+rest were never constrained to recover. Requiring `struct ≥ 0.90` — that the
+protocol still carries its information — is what rules out "damage just made it
+stupid" and makes the result substantive.
+
 ## Design notes
 
 Two things in `nca.py` are easy to get wrong and fail *silently*:
