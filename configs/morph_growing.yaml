@@ -1,0 +1,17 @@
+# Growing regime only: every step starts from a fresh seed, no pool, no damage.
+# This is the C3 checkpoint -- the highest-information run in the milestone.
+# If growth does not converge here, nothing downstream matters and it is cheap
+# to debug. It is also the prevention for the all-dead collapse: two independent
+# reimplementations report that starting straight into the pool regime can land
+# the model in a state where it kills every cell on step 1 and is stuck.
+
+_base_: base.yaml
+
+name: morph_growing
+
+train:
+  steps: 2000
+  pool_from_step: null      # never enable the pool
+  damage_from_step: null    # never damage
+  gate_interval: 500
+  early_stop_on_gates: false

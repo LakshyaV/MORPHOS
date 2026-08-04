@@ -1,0 +1,7 @@
+# The full morphology run: 1000 steps Growing, then Persistent + Regenerating.
+# Budget ~830 ms/step => ~1.5 h, inside the 90-minute G0 budget.
+# Targets gates G1 (growth + persistence) and G2 (regeneration after f=0.30).
+
+_base_: base.yaml
+
+name: morph

@@ -1,56 +1,65 @@
-# Defaults inherited by every experiment. Override with `_base_: base.yaml`
-# in a child config, or on the CLI with `--set train.lr=3e-4`.
+# Defaults every experiment inherits. Child configs use `_base_: base.yaml`.
+# Override on the CLI with `--set train.lr=3e-4` (RHS parsed as YAML).
 
 name: base
 seed: 0
 
-# Measured, not assumed: MPS is 11.2x faster than native arm64 CPU on the
-# decisive 2-organism communication step. See `make bench` / README.
+# Measured, not assumed: MPS beats native arm64 CPU 11.2x on the decisive
+# 2-organism step. See `make bench` and the README table.
 device: mps
 
-organism: {name: nca, args: {}}
-readout:  {name: vote_pool, args: {}}
-damage:   {name: none, args: {}}
+target:
+  shape: disk          # disk | disk_gradient | tadpole
+  radius: 10.0         # 341 alive cells on a 32 grid; max Chebyshev geodesic = 10
+  edge: 1.0
+  color: [0.20, 0.60, 0.86]
 
 nca:
-  # 28 channels: RGBA(4) + sensor + vote + hidden. At 16 channels, taking 8 for
-  # symbol votes leaves too few for morphogenesis and fails silently.
   hidden: 128
   grid: 32
   fire_rate: 0.5
   alive_threshold: 0.1
 
-task:
-  n_referents: 8        # {0,1}^3, factored so attribute-wise MI is defined
-  vocab: 8              # N <= V^L must hold: 8 <= 8^1
-  msg_len: 1
-  tau_start: 2.0
-  tau_end: 0.5
-  tau_anneal_steps: 5000
-  t_inject: 16          # referent removed after this, forcing the sender to STORE it
-
 train:
-  phase: comm           # morph | comm
-  steps: 20000
+  phase: morph
+  steps: 6000
   batch: 32
   lr: 2.0e-3
+  lr_milestones: [2000]     # upstream: PiecewiseConstantDecay([2000], [2e-3, 2e-4])
+  lr_gamma: 0.1
   grad_norm_per_tensor: true
-  pool_size: 1024
-  reseed_worst: 1
-  damage_best: 3
-  t_grow: 64
-  # Long enough for signal to cross the body: stochastic updates propagate
-  # ~0.5 cells/step, so 24 steps would only reach ~12 cells.
-  t_comm: 64
-  # Mandatory on 8 GB. Measured: 3300 MB -> 1110 MB at T=64, and memory is then
-  # nearly independent of rollout length (T=128 costs 1119 MB).
+
+  # ONE scalar per training step, not per sample -- matching upstream.
+  rollout_min: 64
+  rollout_max: 96
+
+  # Mandatory on 8 GB. 3300 MB -> 1110 MB at T=64, and then nearly flat in T.
   checkpoint_every: 8
-  min_alive_frac_for_task_loss: 0.6
-  ckpt_interval: 2000
+
+  pool_size: 1024
+  pool_from_step: 1000      # Growing regime first, then Persistent/Regenerating
+  damage_from_step: 1000
+
+  # Fractions, not counts: reseed/batch is the loss weight on growth-from-seed,
+  # and batch/reseed is the mean pool-entry age. Upstream 1-of-8 and 3-of-8.
+  reseed_worst: 4
+  damage_best: 12
+
   log_interval: 50
+  gate_interval: 500
+  ckpt_interval: 1000
+  early_stop_on_gates: true
+
+guard:
+  death_threshold: 0.1
+  death_patience: 3
+  max_resets: 3
 
 eval:
-  damage_levels: [0.0, 0.10, 0.20, 0.30, 0.45, 0.60]
-  recovery_steps: 256
-  n_episodes: 512
-  n_placements: 32
+  t_grow: 64
+  t_persist: 256
+  g1_rollouts: 128
+  g2_trials: 256
+  g2_severity: 0.30
+  g2_tolerance: 0.02
+  g2_recover_steps: 128
