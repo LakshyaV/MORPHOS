@@ -11,7 +11,12 @@
 _base_: base.yaml
 
 name: comm
-init_from: runs/milestone2/ckpt/last.pt
+# Warm-start from the BROADCAST model, not the morphology one. M3a proved
+# per-cell supervision is what carries a referent to the periphery (95%
+# agreement); starting from the morphology model instead left the sender
+# unable to propagate, and its symbol logits varied by only 0.012 across
+# referents -- the vote channels never learned the referent was there.
+init_from: runs/broadcast/ckpt/last.pt
 prefill_grow: 64
 
 target:
@@ -29,6 +34,7 @@ task:
 
 train:
   phase: comm
+  pool_size: 512          # two organisms => two pools; 1024 each is 234 MB
   steps: 6000
   lr: 1.0e-3
   lr_milestones: [4000]
@@ -39,11 +45,17 @@ train:
   rollout_min: 64
   rollout_max: 96
 
-  # M3a measured the task gradient dominating morphology ~20x. Without an explicit
-  # up-weight the organisms dissolve their bodies to solve the task (IoU 0.52 ->
-  # 0.25 while accuracy hit 0.97). Watch grad_ratio, not the loss values.
-  lambda_morph: 30.0
-  readout_dropout: 0.3
+  # MEASURED, and the previous value was catastrophically wrong. In the comm phase
+  # the task gradient reaching the sender is ~1e-4 -- it crosses a discrete channel,
+  # a second organism, and ~64 steps of BPTT. At lambda_morph=30 morphology
+  # outweighed the task 255,000:1 and accuracy sat at chance for 1050 steps.
+  # Parity is ~1.2e-4; 3e-5 lets the task dominate ~4:1 while still holding the
+  # body, which is already solved (IoU 1.000) and so contributes little gradient.
+  lambda_morph: 3.0e-5
+  # Dropout on the SENDER's readout is noise on the single transmitted symbol,
+  # which fights convention formation. It was harmless in M3a because supervision
+  # was per-cell; here it corrupts the channel itself.
+  readout_dropout: 0.05
 
   log_interval: 50
   ckpt_interval: 1000

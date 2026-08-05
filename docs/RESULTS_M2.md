@@ -165,3 +165,54 @@ The ratio is also not static: on a freshly warm-started model it starts near 0.5
 because the model has never seen an injected referent and its vote channels barely
 move. A single constant is therefore a compromise across a moving target, and a
 ramp may do better if the comm phase needs one.
+
+---
+
+# Milestone 3b — the Lewis game
+
+## A failed first attempt, and what it measured
+
+The first comm run sat at chance (accuracy 0.062–0.188 against a 0.125 floor) for
+1050 steps. Direct gradient measurement found the cause:
+
+```
+task  gradient -> sender          1.02e-04
+morph gradient x lambda_morph=30  2.59e+01
+ratio                             255,000 : 1
+```
+
+The task gradient reaching the sender is tiny — it crosses a discrete channel, a
+second organism, and ~64 steps of BPTT — and `lambda_morph=30` buried it entirely.
+That value came from over-generalising the M3a lesson: there the *vote* gradient
+dominated morphology 20×, so morphology was up-weighted. In the comm phase the
+relationship inverts. Corrected to `3.0e-5` (parity ≈1.2e-4).
+
+A second symptom pointed at a deeper problem: the sender's symbol logits varied by
+only **0.012** across referents. The vote channels had never learned the referent
+was present at all, because warm-starting from the *morphology* model gave a body
+with no propagation — exactly the deficit the M2 probe measured and M3a fixed.
+
+## The fix, and an honesty caveat that must reach the paper
+
+Warm-starting from the **broadcast** checkpoint instead gives a sender whose cells
+already carry the referent. Logit spread rises 0.012 → **2.02**, within-referent
+consistency is **96.9%**, and all 8 symbols are used.
+
+**But the resulting map is referent 0→symbol 0, 1→1, 2→2, …** The broadcast task
+trained the vote channels to encode referent *identity*, so pretraining installed
+an encoder rather than the sender inventing one. This must not be described as a
+protocol that emerged from scratch.
+
+What *does* still emerge is the **convention**. The receiver has never seen these
+symbols and holds no prior about them; "symbol 3 means referent 3" is meaningless
+until the receiver learns it, and the two must co-adapt for the pair to score above
+chance. So the shared meaning emerges even though the encoder was pretrained.
+
+The precise claim is therefore: *the convention is emergent, the encoder is
+pretrained.* Anything stronger is unsupported.
+
+To recover the stronger claim, a from-scratch arm is needed — warm-start the body
+but not the vote channels, with `lambda_morph` correctly set. That is the
+comparison that separates "can they invent a code" from "can they agree on one",
+and it is worth running once the damage experiments are underway, since the
+research question is about survival of a protocol rather than its invention.
