@@ -63,5 +63,5 @@ train:
   readout_dropout: 0.05
 
   log_interval: 50
-  ckpt_interval: 1000
+  ckpt_interval: 250      # a kill costs at most 250 steps; see train_resilient.sh
   early_stop_on_gates: false

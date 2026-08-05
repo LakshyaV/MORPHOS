@@ -26,6 +26,7 @@ def main() -> None:
                    metavar="KEY=VALUE", help="dotted override, e.g. train.lr=3e-4")
     p.add_argument("--run-dir", default=None, help="defaults to runs/<auto-name>")
     p.add_argument("--gates", action="store_true", help="run G1/G2 during training")
+    p.add_argument("--resume", default=None, help="checkpoint to resume from")
     args = p.parse_args()
 
     cfg = load_config(args.config, overrides=args.overrides)
@@ -55,8 +56,9 @@ def main() -> None:
     print(f"steps       : {cfg.train.steps}  batch {cfg.train.batch}  "
           f"rollout U[{cfg.train.rollout_min},{cfg.train.rollout_max}]")
 
-    with RunLog(run_dir, config_dict(cfg)) as log:
-        st = train(cfg, target, run_dir=run_dir, log=log, gate_fn=gate_fn)
+    with RunLog(run_dir, config_dict(cfg), resume=args.resume is not None) as log:
+        st = train(cfg, target, run_dir=run_dir, log=log, gate_fn=gate_fn,
+                   resume=args.resume)
 
     print(f"done at step {st.step} after {st.n_resets} death reset(s)")
     print(f"metrics -> {run_dir}/metrics.jsonl")
