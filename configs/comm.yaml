@@ -45,16 +45,21 @@ train:
   rollout_min: 64
   rollout_max: 96
 
-  # MEASURED, and the previous value was catastrophically wrong. In the comm phase
-  # the task gradient reaching the sender is ~1e-4 -- it crosses a discrete channel,
-  # a second organism, and ~64 steps of BPTT. At lambda_morph=30 morphology
-  # outweighed the task 255,000:1 and accuracy sat at chance for 1050 steps.
-  # Parity is ~1.2e-4; 3e-5 lets the task dominate ~4:1 while still holding the
-  # body, which is already solved (IoU 1.000) and so contributes little gradient.
-  lambda_morph: 3.0e-5
-  # Dropout on the SENDER's readout is noise on the single transmitted symbol,
-  # which fights convention formation. It was harmless in M3a because supervision
-  # was per-cell; here it corrupts the channel itself.
+  # MEASURED on THIS configuration -- the value does not transfer across
+  # warm-starts, which is the whole lesson here.
+  #
+  #   morphology warm-start: task grad 1e-4, morph grad 0.86  -> task/morph 1.2e-4
+  #   broadcast  warm-start: task grad 1.0,  morph grad 0.17   -> task/morph 5.9
+  #
+  # Four orders of magnitude, because with broadcast pretraining the vote channels
+  # actually encode the referent so the task loss has a real gradient path. Two
+  # failures bracketed it: lambda_morph=30 under the morphology warm-start buried
+  # the task 255,000:1 (chance accuracy for 1050 steps), and 3e-5 under the
+  # broadcast warm-start dissolved the body (IoU 0.92 -> 0.03 in 15 steps, plus a
+  # death reset). Parity here is ~5.9; 12 puts morphology at ~2x the task, which
+  # holds the body without swamping the protocol.
+  # Seed variance is high (2.2-9.4), so do not over-tune this.
+  lambda_morph: 12.0
   readout_dropout: 0.05
 
   log_interval: 50
