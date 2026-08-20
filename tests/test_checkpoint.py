@@ -38,6 +38,27 @@ def tiny_cfg(*overrides: str):
     return load_config("configs/base.yaml", overrides=base + list(overrides))
 
 
+def tiny_comm_cfg(*overrides: str):
+    base = [
+        "device=cpu",
+        "init_from=null",
+        "nca.grid=12",
+        "nca.hidden=16",
+        "target.radius=4.0",
+        "train.batch=4",
+        "train.reseed_worst=1",
+        "train.damage_best=1",
+        "train.rollout_min=6",
+        "train.rollout_max=8",
+        "train.pool_from_step=null",
+        "train.damage_from_step=null",
+        "train.checkpoint_every=null",
+        "train.log_interval=1000",
+        "train.early_stop_on_gates=false",
+    ]
+    return load_config("configs/comm.yaml", overrides=base + list(overrides))
+
+
 def _target(cfg):
     return build_target(cfg.target.shape, cfg.nca.grid, radius=cfg.target.radius)
 
@@ -136,6 +157,62 @@ def test_resume_is_bit_exact(tmp_path):
             f"{na} diverged after resume; max delta "
             f"{(pa - pb).abs().max().item():.3e}"
         )
+
+
+def test_comm_checkpoint_carries_the_receiver(tmp_path):
+    """The convention is joint state: a comm checkpoint without the receiver is
+    unusable for eval and silently corrupts resume (sender continues, receiver
+    restarts from its warm-start)."""
+    cfg = tiny_comm_cfg()
+    device = torch.device("cpu")
+    st = build_state(cfg, device=device, weight_seed=1)
+    assert st.receiver is not None
+
+    save(tmp_path / "c.pt", step=3, model=st.model, receiver=st.receiver)
+
+    fresh = build_state(cfg, device=device, weight_seed=999)
+    assert not torch.equal(fresh.receiver.fc1.weight, st.receiver.fc1.weight)
+    load(tmp_path / "c.pt", model=fresh.model, receiver=fresh.receiver)
+    assert torch.equal(fresh.receiver.fc1.weight, st.receiver.fc1.weight)
+
+    # A sender-only checkpoint must be refused, not resumed with a reset receiver.
+    save(tmp_path / "sender_only.pt", step=3, model=st.model)
+    with pytest.raises(ValueError, match="no receiver"):
+        load(tmp_path / "sender_only.pt", model=fresh.model, receiver=fresh.receiver)
+
+
+@pytest.mark.slow
+def test_comm_resume_is_bit_exact(tmp_path):
+    """The comm twin of `test_resume_is_bit_exact`: both organisms must come back
+    parameter for parameter, or every resilient-training resume corrupts the pair."""
+    target = _target(tiny_comm_cfg())
+
+    straight = train(
+        tiny_comm_cfg("train.steps=10"), target, run_dir=tmp_path / "straight"
+    )
+
+    train(tiny_comm_cfg("train.steps=5"), target, run_dir=tmp_path / "split")
+    ckpt = latest(tmp_path / "split")
+    assert ckpt is not None
+
+    second = train(
+        tiny_comm_cfg("train.steps=10"),
+        target,
+        run_dir=tmp_path / "split",
+        resume=ckpt,
+    )
+
+    for org in ("model", "receiver"):
+        for (na, pa), (nb, pb) in zip(
+            getattr(straight, org).named_parameters(),
+            getattr(second, org).named_parameters(),
+            strict=True,
+        ):
+            assert na == nb
+            assert torch.equal(pa, pb), (
+                f"{org}.{na} diverged after resume; max delta "
+                f"{(pa - pb).abs().max().item():.3e}"
+            )
 
 
 @pytest.mark.slow

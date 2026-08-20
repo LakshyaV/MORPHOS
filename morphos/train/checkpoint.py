@@ -37,6 +37,8 @@ def save(
     scheduler: Any = None,
     rng: RNG | None = None,
     pool: Any = None,
+    receiver: torch.nn.Module | None = None,
+    receiver_pool: Any = None,
     config: dict | None = None,
     target_fingerprint: str | None = None,
     extra: dict | None = None,
@@ -57,6 +59,10 @@ def save(
         payload["rng"] = rng_state(rng)
     if pool is not None:
         payload["pool"] = pool.state_dict()
+    if receiver is not None:
+        payload["receiver"] = receiver.state_dict()
+    if receiver_pool is not None:
+        payload["receiver_pool"] = receiver_pool.state_dict()
     if config is not None:
         payload["config_json"] = json.dumps(config, default=str)
     if target_fingerprint is not None:
@@ -78,6 +84,8 @@ def load(
     scheduler: Any = None,
     rng: RNG | None = None,
     pool: Any = None,
+    receiver: torch.nn.Module | None = None,
+    receiver_pool: Any = None,
     map_location: str | torch.device = "cpu",
     expect_target_fingerprint: str | None = None,
 ) -> dict:
@@ -102,6 +110,18 @@ def load(
         load_rng_state(rng, ckpt["rng"])
     if pool is not None and "pool" in ckpt:
         pool.load_state_dict(ckpt["pool"])
+    if receiver is not None:
+        # A comm checkpoint without the receiver cannot be resumed honestly: the
+        # receiver would silently restart from its warm-start while the sender
+        # continues, and the pair's convention is joint state.
+        if "receiver" not in ckpt:
+            raise ValueError(
+                f"{path} has no receiver weights; refusing to resume a comm run "
+                "with a reset receiver"
+            )
+        receiver.load_state_dict(ckpt["receiver"])
+    if receiver_pool is not None and "receiver_pool" in ckpt:
+        receiver_pool.load_state_dict(ckpt["receiver_pool"])
     return ckpt
 
 

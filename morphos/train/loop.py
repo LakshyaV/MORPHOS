@@ -352,6 +352,8 @@ def _save_last(st: TrainState, cfg: Config, run_dir: Path, target: Tensor) -> No
         scheduler=st.sched,
         rng=st.rng,
         pool=st.pool,
+        receiver=st.receiver,
+        receiver_pool=st.receiver_pool,
         config=config_dict(cfg),
         target_fingerprint=target_fingerprint(target),
         extra={"n_resets": st.n_resets},
@@ -390,6 +392,8 @@ def train(
             scheduler=st.sched,
             rng=st.rng,
             pool=st.pool,
+            receiver=st.receiver,
+            receiver_pool=st.receiver_pool,
             map_location=device,
             expect_target_fingerprint=target_fingerprint(target),
         )
@@ -449,6 +453,7 @@ def train(
                 step=st.step,
                 model=st.model,
                 rng=st.rng,
+                receiver=st.receiver,
                 target_fingerprint=target_fingerprint(target),
             )
 
