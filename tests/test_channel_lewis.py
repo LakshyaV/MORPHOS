@@ -109,6 +109,10 @@ def test_symbol_stats_detect_collapse():
 
 
 def build_pair(grid=16, hidden=32, device="cpu"):
+    # Weights draw from the GLOBAL stream: without a seed the outcome depends on
+    # whichever test ran before, and an unlucky init dies within 8 steps and
+    # returns an all-zero vote. Rollout RNG is separately seeded via make_rng.
+    torch.manual_seed(7)
     s = NCAOrganism(layout=SENDER_LAYOUT, hidden=hidden, grid=grid).to(device)
     r = NCAOrganism(layout=RECEIVER_LAYOUT, hidden=hidden, grid=grid).to(device)
     for m in (s, r):

@@ -454,6 +454,7 @@ def train(
                 model=st.model,
                 rng=st.rng,
                 receiver=st.receiver,
+                config=config_dict(cfg),
                 target_fingerprint=target_fingerprint(target),
             )
 

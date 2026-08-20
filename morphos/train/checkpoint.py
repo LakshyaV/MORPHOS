@@ -162,3 +162,37 @@ def load_organism(
     model.load_state_dict(raw["model"])
     model.eval()
     return model, cfg, raw.get("step")
+
+
+def load_comm_pair(
+    path: str | Path, device: torch.device | str = "cpu"
+) -> tuple[Any, Any, dict, int | None]:
+    """Rebuild a trained sender/receiver pair from a comm checkpoint.
+
+    -> (sender in eval mode, receiver in eval mode, config dict, step)
+    """
+    from morphos.substrate.nca import RECEIVER_LAYOUT, SENDER_LAYOUT, NCAOrganism
+
+    raw = torch.load(Path(path), map_location="cpu", weights_only=False)
+    cfg = config_from(raw)
+    if cfg is None:
+        raise ValueError(f"{path} carries no embedded config")
+    if "receiver" not in raw:
+        raise ValueError(
+            f"{path} has no receiver weights -- not a comm checkpoint, or written "
+            "before receiver checkpointing was fixed"
+        )
+
+    kw = dict(
+        hidden=cfg["nca"]["hidden"],
+        grid=cfg["nca"]["grid"],
+        fire_rate=cfg["nca"]["fire_rate"],
+        alive_threshold=cfg["nca"]["alive_threshold"],
+    )
+    sender = NCAOrganism(layout=SENDER_LAYOUT, **kw).to(device)
+    sender.load_state_dict(raw["model"])
+    sender.eval()
+    receiver = NCAOrganism(layout=RECEIVER_LAYOUT, **kw).to(device)
+    receiver.load_state_dict(raw["receiver"])
+    receiver.eval()
+    return sender, receiver, cfg, raw.get("step")
