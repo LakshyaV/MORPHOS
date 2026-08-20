@@ -26,10 +26,34 @@ def main() -> None:
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--permutations", type=int, default=1000)
     p.add_argument("--json-out", default=None)
+    p.add_argument("--cross-receiver", default=None, metavar="CKPT",
+                   help="take the receiver from another seed's checkpoint: the "
+                        "cross-play arm of G4 (a convention, not a universal, "
+                        "so accuracy must fall to <= 1/N + 0.10)")
     args = p.parse_args()
 
     sender, receiver, cfg, step = load_comm_pair(Path(args.ckpt), args.device)
     N, V = cfg["task"]["n_referents"], cfg["task"]["vocab"]
+
+    if args.cross_receiver:
+        _, receiver, rcfg, rstep = load_comm_pair(Path(args.cross_receiver), args.device)
+        assert (rcfg["task"]["n_referents"], rcfg["task"]["vocab"]) == (N, V)
+        bank = collect_episodes(
+            sender, receiver, cfg,
+            episodes=args.episodes, batch=args.batch, seed=args.seed, device=args.device,
+        )
+        acc = float((bank.answer_idx == bank.referents).double().mean())
+        ok = acc <= 1 / N + 0.10
+        print(f"cross-play : sender {args.ckpt} (step {step}) x "
+              f"receiver {args.cross_receiver} (step {rstep})")
+        print(f"  accuracy {acc:.4f}   (need <= {1 / N + 0.10:.3f})   "
+              f"{'PASS' if ok else 'FAIL -- protocol may be a universal'}")
+        if args.json_out:
+            Path(args.json_out).write_text(json.dumps(
+                {"mode": "crossplay", "sender_ckpt": str(args.ckpt),
+                 "receiver_ckpt": str(args.cross_receiver), "acc": acc,
+                 "passed": ok}, indent=2))
+        raise SystemExit(0 if ok else 1)
 
     bank = collect_episodes(
         sender, receiver, cfg,
