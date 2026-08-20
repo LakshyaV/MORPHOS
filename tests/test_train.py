@@ -194,6 +194,32 @@ def test_train_step_records_expected_fields():
     assert rec["pool"] == 0.0, "Growing regime must not report pool usage"
 
 
+def test_comm_step_carries_vote_losses_for_both_organisms():
+    """The comm loss must include the per-cell vote terms -- their absence is
+    exactly what dissolved the code in the first comm run (agreement 0.95 -> 0.40
+    in 250 steps) -- and the channel-SNR telemetry must be logged."""
+    cfg = load_config("configs/comm.yaml", overrides=[
+        "device=cpu", "init_from=null", "nca.grid=12", "nca.hidden=16",
+        "target.radius=4.0", "train.batch=4", "train.reseed_worst=1",
+        "train.damage_best=1", "train.rollout_min=6", "train.rollout_max=8",
+        "train.pool_from_step=null", "train.damage_from_step=null",
+        "train.checkpoint_every=null", "train.lambda_vote=1.0",
+    ])
+    device = torch.device("cpu")
+    st = build_state(cfg, device=device, weight_seed=1)
+    st.step = cfg.train.log_interval - 1  # exercise the gradient diagnostic path
+    rec = train_step(st, disk_target(cfg.nca.grid, cfg.target.radius), make_rng(0, device), cfg)
+
+    for key in ("vote_sender", "vote_receiver", "p_top", "agree_recv",
+                "grad_vote_task", "grad_morph_task"):
+        assert key in rec, f"missing metric {key}"
+    assert rec["vote_sender"] > 0 and rec["vote_receiver"] > 0
+    assert 0.0 < rec["p_top"] <= 1.0
+    assert rec["grad_vote_task"] > 0, "vote gradient must actually reach the sender"
+    import math
+    assert math.isfinite(rec["loss"])
+
+
 def test_lr_schedule_steps_at_the_milestone():
     cfg = tiny_cfg("train.lr=2e-3", "train.lr_milestones=[3]", "train.lr_gamma=0.1")
     device = torch.device("cpu")

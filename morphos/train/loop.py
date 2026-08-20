@@ -481,13 +481,22 @@ def _comm_step(
     """One Lewis-game step: sender -> discrete symbol -> receiver.
 
     Both organisms carry a morphology loss so neither dissolves its body to solve
-    the task, and the sender additionally carries the per-cell vote loss that
-    Milestone 3a showed is what forces the referent out to the periphery.
+    the task, and BOTH carry the per-cell vote loss that Milestone 3a showed is
+    what forces information out to the periphery. The first comm run omitted it
+    and the broadcast-installed code dissolved: agreement fell 0.95 -> 0.40 within
+    250 steps, the pooled vote flattened, and -- because the Gumbel-max channel
+    transmits a SAMPLE of the pooled vote at every tau -- the receiver heard
+    near-uniform noise for 2750 steps. The sender's per-cell target is the
+    referent, which maintains the pretrained encoder (the honest claim stays "the
+    convention is emergent, the encoder is pretrained", docs/RESULTS_M2.md); the
+    receiver's is dense decode supervision through the loss, not an input path,
+    so G4's ablations are untouched. The from-scratch arm must drop the sender
+    term or retarget it at the emitted symbol.
     """
     from morphos.task.broadcast import sample_referents
     from morphos.task.channel import symbol_stats
     from morphos.task.lewis import accuracy, run_episode, task_loss
-    from morphos.task.readout import agreement, quorum_fraction
+    from morphos.task.readout import agreement, per_cell_vote_loss, quorum_fraction
 
     B = cfg.train.batch
     device = x0.device
@@ -522,7 +531,31 @@ def _comm_step(
     morph_s = rgba_mse(ep.sender_state, target)
     morph_r = rgba_mse(ep.receiver_state, target)
     task = task_loss(ep, cfg.task.n_referents)
-    loss = task + cfg.train.lambda_morph * (morph_s + morph_r)
+
+    s_alive = st.model.alive_mask(ep.sender_state)
+    r_alive = st.receiver.alive_mask(ep.receiver_state)
+    vote_s = per_cell_vote_loss(st.pool_readout, ep.sender_state, s_alive, referents)
+    vote_r = per_cell_vote_loss(st.receiver_readout, ep.receiver_state, r_alive, referents)
+
+    loss = (
+        task
+        + cfg.train.lambda_vote * (vote_s + vote_r)
+        + cfg.train.lambda_morph * (morph_s + morph_r)
+    )
+
+    # Same balance diagnostic as the broadcast phase: per-term gradient norms on
+    # the sender, relative to the task term. This is the instrument that would
+    # have caught the code dissolving in the first 50 steps. On fc2, not fc1:
+    # fc2 is zero-initialised (growing-NCA convention), so from scratch nothing
+    # reaches fc1 until fc2 moves, while fc2's gradient is informative always.
+    grad_vote = grad_morph = float("nan")
+    if (st.step + 1) % cfg.train.log_interval == 0 or st.step == 0:
+        gt = torch.autograd.grad(task, st.model.fc2.weight, retain_graph=True)[0]
+        gv = torch.autograd.grad(vote_s, st.model.fc2.weight, retain_graph=True)[0]
+        gm = torch.autograd.grad(morph_s, st.model.fc2.weight, retain_graph=True)[0]
+        n = gt.norm().clamp(min=1e-12)
+        grad_vote = (gv.norm() / n).item()
+        grad_morph = (gm.norm() / n).item()
 
     st.opt.zero_grad(set_to_none=True)
     loss.backward()
@@ -539,12 +572,19 @@ def _comm_step(
 
     with torch.no_grad():
         stats = symbol_stats(ep.symbol_idx, cfg.task.vocab)
-        s_alive = st.model.alive_mask(ep.sender_state)
         rec = {
             "loss": loss.item(),
             "task_loss": task.item(),
+            "vote_sender": vote_s.item(),
+            "vote_receiver": vote_r.item(),
             "morph_sender": morph_s.item(),
             "morph_receiver": morph_r.item(),
+            # exp(log(pooled+eps)) = the pooled vote: its max IS the probability
+            # the channel transmits the argmax symbol. Channel SNR, one number.
+            "p_top": ep.symbol_logits.exp().max(-1).values.mean().item(),
+            "agree_recv": agreement(st.receiver_readout, ep.receiver_state, r_alive).mean().item(),
+            "grad_vote_task": grad_vote,
+            "grad_morph_task": grad_morph,
             "acc": accuracy(ep),
             "entropy": stats["entropy"],
             "v_used": float(stats["v_used"]),

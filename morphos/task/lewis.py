@@ -41,7 +41,15 @@ class EpisodeOutput:
 def make_ear_inject_fn(
     symbol: Tensor, layout, grid: int, t_inject: int, *, patch: int = 3
 ):
-    """Write the one-hot symbol into the Receiver's sensor ('ear') patch.
+    """Write the symbol into the Receiver's sensor ('ear') patch, as a bipolar
+    {-1,+1} pattern.
+
+    Bipolar for the same reason referent codes are (broadcast.py): a raw one-hot
+    is 7/8 zeros, and a written zero is indistinguishable from no injection, so
+    almost the whole symbol would arrive as silence. `2*onehot - 1` makes every
+    symbol a full-energy pattern while the channel stays exactly V-ary discrete
+    (G4's purity gate counts distinct patterns, and there are still exactly V).
+    The straight-through gradient passes through the affine map unchanged.
 
     Same convention as the sender's sensor: writing simply stops at `t_inject`
     rather than being zeroed, so removal is the absence of a write and not a
@@ -53,7 +61,9 @@ def make_ear_inject_fn(
         if t >= t_inject:
             return x
         x = x.clone()
-        x[:, layout.sensor, ys, xs] = symbol.view(symbol.shape[0], -1, 1, 1)
+        x[:, layout.sensor, ys, xs] = (symbol * 2.0 - 1.0).view(
+            symbol.shape[0], -1, 1, 1
+        )
         return x
 
     return inject

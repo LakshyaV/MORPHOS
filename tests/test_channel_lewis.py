@@ -146,6 +146,29 @@ def test_episode_runs_and_shapes_are_right():
     assert_discrete(ep.symbol, V)
 
 
+def test_ear_injection_is_bipolar_full_energy():
+    """A raw one-hot is 7/8 zeros and a written zero is indistinguishable from no
+    injection (the referent-code argument, broadcast.py). The ear must therefore
+    write bipolar {-1,+1}: every symbol a full-energy pattern, still exactly V
+    distinct ones."""
+    from morphos.task.lewis import make_ear_inject_fn
+
+    grid, patch = 16, 3
+    x = torch.zeros(2, RECEIVER_LAYOUT.total, grid, grid)
+    sym = torch.zeros(2, V)
+    sym[0, 3] = 1.0
+    sym[1, 5] = 1.0
+
+    inj = make_ear_inject_fn(sym, RECEIVER_LAYOUT, grid, t_inject=4, patch=patch)
+    out = inj(x, t=0)
+    ear = out[:, RECEIVER_LAYOUT.sensor, grid // 2, grid // 2]
+
+    assert torch.all((ear == 1.0) | (ear == -1.0)), "ear write must be bipolar"
+    assert ear[0, 3] == 1.0 and ear[0].sum() == 2 - V  # one +1, seven -1
+    assert not torch.equal(ear[0], ear[1]), "distinct symbols, distinct patterns"
+    assert torch.equal(inj(x, t=4), x), "writing must stop at t_inject"
+
+
 def test_receiver_sees_only_the_symbol():
     """The core anti-cheat: identical symbols must produce identical receiver
     behaviour regardless of what the sender was looking at. If the referent

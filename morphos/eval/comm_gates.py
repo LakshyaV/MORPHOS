@@ -79,7 +79,7 @@ class EpisodeBank:
     referents: Tensor  # (E,) int
     symbol_idx: Tensor  # (E,) int, deterministic argmax channel
     symbol_idx_noisy: Tensor  # (E,) int, Gumbel draw at tau_end (reported, not gated)
-    probs_by_v: Tensor  # (V+1, E, N) receiver answer distributions; slot V = silence
+    probs_by_v: Tensor  # (V+1, E, N) receiver answer distributions; slot V = message removed (no ear write)
     n_referents: int
     vocab: int
 
@@ -93,11 +93,16 @@ class EpisodeBank:
 
 
 def _receiver_probs(
-    receiver, readout: VotePool, r0: Tensor, symbol: Tensor, *,
+    receiver, readout: VotePool, r0: Tensor, symbol: Tensor | None, *,
     seed: int, t_episode: int, t_inject: int, grid: int, patch: int,
 ) -> Tensor:
+    """`symbol=None` is the message-removed arm: no ear write at all. Removal is
+    the absence of a write (the same convention as the t_inject cutoff), never a
+    written blank, which under bipolar injection would be a detectable event."""
     g = torch.Generator(device=r0.device).manual_seed(seed)
-    inj = make_ear_inject_fn(symbol, receiver.layout, grid, t_inject, patch=patch)
+    inj = None if symbol is None else make_ear_inject_fn(
+        symbol, receiver.layout, grid, t_inject, patch=patch
+    )
     out = receiver.rollout(r0, t_episode, generator=g, inject_fn=inj)
     return readout(out, receiver.alive_mask(out))
 
@@ -147,7 +152,7 @@ def collect_episodes(
         # One RNG seed per batch, shared by all V+1 receiver rollouts: within an
         # episode only the symbol varies, which is what makes CIC causal.
         r_seed = int(torch.randint(2**31 - 1, (1,), generator=cpu_g).item())
-        counterfactuals = list(eye.unsqueeze(1).expand(V, B, V)) + [torch.zeros(B, V, device=device)]
+        counterfactuals = list(eye.unsqueeze(1).expand(V, B, V)) + [None]
         pv = torch.stack([
             _receiver_probs(
                 receiver, r_read, r0, s, seed=r_seed,

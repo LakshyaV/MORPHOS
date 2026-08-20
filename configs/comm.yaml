@@ -5,8 +5,9 @@
 # but that symbol and must name the referent. Nobody tells them what the symbols
 # mean.
 #
-# Both warm-start from the morphology checkpoint so neither relearns how to be a
-# body. Parameters stay separate -- no weight sharing, no shared state.
+# Both warm-start from the BROADCAST checkpoint (see init_from below) so neither
+# relearns how to be a body. Parameters stay separate -- no weight sharing, no
+# shared state.
 
 _base_: base.yaml
 
@@ -45,21 +46,30 @@ train:
   rollout_min: 64
   rollout_max: 96
 
-  # MEASURED on THIS configuration -- the value does not transfer across
-  # warm-starts, which is the whole lesson here.
+  # MEASURED on THIS configuration -- the values do not transfer across
+  # warm-starts or loss compositions, which is the whole lesson here. Fresh
+  # measurement on the broadcast warm-start, fc2 grad norms, batch 32, T=64:
   #
-  #   morphology warm-start: task grad 1e-4, morph grad 0.86  -> task/morph 1.2e-4
-  #   broadcast  warm-start: task grad 1.0,  morph grad 0.17   -> task/morph 5.9
+  #   task 0.369   vote_s 4.348   morph_s 0.471    (sender)
+  #   task 4.957   vote_r 4.256   morph_r 0.496    (receiver)
   #
-  # Four orders of magnitude, because with broadcast pretraining the vote channels
-  # actually encode the referent so the task loss has a real gradient path. Two
-  # failures bracketed it: lambda_morph=30 under the morphology warm-start buried
-  # the task 255,000:1 (chance accuracy for 1050 steps), and 3e-5 under the
-  # broadcast warm-start dissolved the body (IoU 0.92 -> 0.03 in 15 steps, plus a
-  # death reset). Parity here is ~5.9; 12 puts morphology at ~2x the task, which
-  # holds the body without swamping the protocol.
-  # Seed variance is high (2.2-9.4), so do not over-tune this.
-  lambda_morph: 12.0
+  # lambda_vote is the fix for the run that stalled at chance for 2750 steps
+  # (runs/comm_pooled_only_stall): without per-cell supervision the
+  # broadcast-installed code dissolved -- agreement 0.95 -> 0.40 inside 250
+  # steps -- and since the Gumbel-max channel transmits a SAMPLE of the pooled
+  # vote at every tau, the receiver heard near-uniform noise and nothing could
+  # relearn. 0.25 puts sender code maintenance at ~2.9x the task pull and adds
+  # ~0.2x of dense per-cell decode pressure on the receiver (M3a's lesson,
+  # applied to both organisms). NOTE for the from-scratch arm: drop the sender
+  # vote term or retarget it at the emitted symbol, and expect to re-measure.
+  lambda_vote: 0.25
+  # The old 12.0 was calibrated as "2x task" on a different instrument; on this
+  # one it put morphology at 15x the task, and per-tensor grad normalization
+  # then starved the vote/task rows of fc2 (iou pinned 1.000 while the code
+  # dissolved). 4.0 keeps the body at ~2x the vote anchor. The old brackets
+  # still stand: ~0 dissolves the body, 30 buries the task.
+  # Seed variance is high, so do not over-tune either value.
+  lambda_morph: 4.0
   readout_dropout: 0.05
 
   log_interval: 50

@@ -216,3 +216,41 @@ but not the vote channels, with `lambda_morph` correctly set. That is the
 comparison that separates "can they invent a code" from "can they agree on one",
 and it is worth running once the damage experiments are underway, since the
 research question is about survival of a protocol rather than its invention.
+
+## Attempt 2: pooled-only supervision dissolves the code (negative result)
+
+The first full run of the corrected configuration (`runs/comm_pooled_only_stall`,
+2750 steps) sat at chance throughout — and the training log shows exactly why.
+The loss was `task + λ_morph·morph`: a term protecting the body and **no term
+protecting the code**. The M3a lesson — per-cell supervision is what forces
+information across the substrate — had been written into `_comm_step`'s docstring
+but never into its loss.
+
+| step | cell agreement | quorum | H(sampled symbols) | body IoU |
+|---|---|---|---|---|
+| 1 | 0.950 | 0.912 | 2.88 / 3.0 bits | 0.93 |
+| 250 | 0.488 | 0.144 | 2.37 | 0.99 |
+| 500–2750 | ~0.4 | ~0.15 | ~2.8 | 1.000 |
+
+The broadcast-installed code dissolved within 250 steps while the body stayed
+pixel-perfect. Two structural facts made this fatal rather than recoverable:
+
+1. **The Gumbel-max channel transmits a sample of the pooled vote at every τ.**
+   `argmax((log p̄ + G)/τ)` does not depend on τ, so the anneal never sharpens
+   what the receiver hears — only the sender's own vote coherence can. Once the
+   pooled vote flattened, the receiver heard near-uniform noise (H ≈ 2.8 of 3
+   bits), had nothing to correlate, and the task gradient back through the
+   channel stayed ~0. A self-reinforcing deadlock.
+2. **The ear injection was a raw one-hot** — 7/8 of written values were 0, and a
+   written zero is indistinguishable from no injection (the same argument that
+   made referent codes bipolar). Most of every symbol arrived as silence.
+
+Fixes, measured and applied (`configs/comm.yaml`): per-cell vote loss on **both**
+organisms (sender target = referent, maintaining the pretrained encoder — the
+honest claim above is unchanged; receiver target = dense decode supervision,
+through the loss, not an input path, so G4's ablations are untouched), bipolar
+{−1,+1} ear injection, and re-measured loss balance (λ_vote = 0.25,
+λ_morph = 4.0 — the old 12.0 put morphology at 15× the task gradient under this
+warm-start, and per-tensor grad normalization then starved the vote rows of fc2).
+Channel-SNR telemetry (`p_top`, `agree_recv`, per-term gradient ratios) is now
+logged every 50 steps so a dissolving code is visible within one log line.
